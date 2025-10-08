@@ -2,7 +2,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-KEYFILE = "tarotbot-474417-5b74a0a7ebb3.json"
+KEYFILE = "tarotbot-474417-ae1472245d2f.json"
 SHEET_ID = "1c5mZaUnlkHH3EGWBbbYwujYXZkM-1bRN_vkNEsQy_5M"
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
