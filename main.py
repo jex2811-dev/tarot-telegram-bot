@@ -8,7 +8,6 @@ import os
 from gsheets_helper import add_user
 from daily_card import get_daily_card, raccoon_interpretation_callback
 
-# Стартова команда
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -31,7 +30,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=markup
     )
 
-# Обробка повідомлень
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
@@ -42,9 +40,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
-# Запуск бота
 def main():
-    token = os.getenv("BOT_TOKEN")  # ✅ Тепер читає з середовища!
+    token = os.getenv("BOT_TOKEN")
     app = ApplicationBuilder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -52,7 +49,7 @@ def main():
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
 
     print("✅ Бот запущений!")
-    app.run_polling()
+    app.run_polling()  # ✅ Ось тут запускається бот!
 
 if __name__ == "__main__":
     main()
