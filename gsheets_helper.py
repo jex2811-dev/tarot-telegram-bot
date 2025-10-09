@@ -1,5 +1,3 @@
-import os
-import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
@@ -10,11 +8,8 @@ SHEET_ID = "1c5mZaUnlkHH3EGWBbbYwujYXZkM-1bRN_vkNEsQy_5M"
 # 🔹 Дозволи для доступу до Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-# 🔹 Зчитуємо ключ із середовища (Render → Environment → GOOGLE_CREDENTIALS)
-keyfile_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-
-# 🔹 Авторизація через Google API
-creds = ServiceAccountCredentials.from_json_keyfile_dict(keyfile_dict, scope)
+# ✅ Зчитування credentials з секретного файлу (Render → Secret Files → google-credentials.json)
+creds = ServiceAccountCredentials.from_json_keyfile_name("/etc/secrets/google-credentials.json", scope)
 client = gspread.authorize(creds)
 
 # 🔹 Підключаємо таблиці
