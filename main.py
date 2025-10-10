@@ -1,9 +1,10 @@
 diff --git a/main.py b/main.py
-index 52a75718e65a98c8e22218661e1cebf7cf0dce94..deb1a2e743f24b262407f0b1cf48207354cec045 100644
+index 52a75718e65a98c8e22218661e1cebf7cf0dce94..16c7401fdeb22ae239e452b23600c18c0920e9bb 100644
 --- a/main.py
 +++ b/main.py
-@@ -1,55 +1,60 @@
+@@ -1,55 +1,66 @@
 -from telegram import Update, ReplyKeyboardMarkup
++import logging
 +import os
 +
 +from telegram import ReplyKeyboardMarkup, Update
@@ -55,8 +56,13 @@ index 52a75718e65a98c8e22218661e1cebf7cf0dce94..deb1a2e743f24b262407f0b1cf482073
          await update.message.reply_text("Оберіть команду з меню ⬇️")
  
  def main():
++    logging.basicConfig(level=logging.INFO)
++
      token = os.getenv("BOT_TOKEN")
 -    app = ApplicationBuilder().token(token).build()
++    if not token:
++        raise RuntimeError("BOT_TOKEN environment variable is not set")
++
 +    app = Application.builder().token(token).build()
  
      app.add_handler(CommandHandler("start", start))
