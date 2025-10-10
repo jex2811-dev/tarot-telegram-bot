@@ -1,3 +1,4 @@
+import logging
 import os
 
 from telegram import ReplyKeyboardMarkup, Update
@@ -46,7 +47,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     token = os.getenv("BOT_TOKEN")
+    if not token:
+        raise RuntimeError("BOT_TOKEN environment variable is not set")
+
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
