@@ -1,8 +1,8 @@
 diff --git a/main.py b/main.py
-index 52a75718e65a98c8e22218661e1cebf7cf0dce94..16c7401fdeb22ae239e452b23600c18c0920e9bb 100644
+index 52a75718e65a98c8e22218661e1cebf7cf0dce94..e4ad3104d3ef736a3e2ff9d08be3c7e190c47a3c 100644
 --- a/main.py
 +++ b/main.py
-@@ -1,55 +1,66 @@
+@@ -1,55 +1,71 @@
 -from telegram import Update, ReplyKeyboardMarkup
 +import logging
 +import os
@@ -23,6 +23,8 @@ index 52a75718e65a98c8e22218661e1cebf7cf0dce94..16c7401fdeb22ae239e452b23600c18c
  from gsheets_helper import add_user
  from daily_card import get_daily_card, raccoon_interpretation_callback
  
++logger = logging.getLogger(__name__)
++
  async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
      user = update.effective_user
  
@@ -56,7 +58,10 @@ index 52a75718e65a98c8e22218661e1cebf7cf0dce94..16c7401fdeb22ae239e452b23600c18c
          await update.message.reply_text("Оберіть команду з меню ⬇️")
  
  def main():
-+    logging.basicConfig(level=logging.INFO)
++    logging.basicConfig(
++        level=logging.INFO,
++        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
++    )
 +
      token = os.getenv("BOT_TOKEN")
 -    app = ApplicationBuilder().token(token).build()
@@ -69,8 +74,10 @@ index 52a75718e65a98c8e22218661e1cebf7cf0dce94..16c7401fdeb22ae239e452b23600c18c
      app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
      app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
  
-     print("✅ Бот запущений!")
-     app.run_polling()  # ✅ Ось тут запускається бот!
+-    print("✅ Бот запущений!")
+-    app.run_polling()  # ✅ Ось тут запускається бот!
++    logger.info("✅ Бот запущений та очікує оновлення")
++    app.run_polling()
  
  if __name__ == "__main__":
      main()
