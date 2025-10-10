@@ -14,6 +14,8 @@ from telegram.ext import (
 from gsheets_helper import add_user
 from daily_card import get_daily_card, raccoon_interpretation_callback
 
+logger = logging.getLogger(__name__)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -47,7 +49,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
     token = os.getenv("BOT_TOKEN")
     if not token:
@@ -59,8 +64,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
 
-    print("✅ Бот запущений!")
-    app.run_polling()  # ✅ Ось тут запускається бот!
+    logger.info("✅ Бот запущений та очікує оновлення")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
