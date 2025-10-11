@@ -1,4 +1,0 @@
-touch images/.keep
-git add images/.keep
-git commit -m "Ensure images folder is included in deployment"
-git push
