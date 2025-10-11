@@ -47,10 +47,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
 
+    # 🪄 Атмосферне привітання
+    welcome_text = (
+        f"Привіт, {user.first_name or 'друже'}! 🦝✨\n\n"
+        "Я — <b>Містичний Єнот</b>, твій магічний провідник у світі карт Таро 🔮\n"
+        "Разом ми будемо відкривати підказки Всесвіту — про почуття, фінанси, кар’єру та щоденні знаки долі 🌙\n\n"
+        "🃏 <b>Карта дня</b> — твій щоденний супутник. Вона допоможе зрозуміти енергію дня, "
+        "налаштуватися на потрібну хвилю та побачити приховані можливості.\n\n"
+        "🔮 <b>Категорії розкладів</b> — обери, про що хочеш дізнатися:\n"
+        "   💞 Кохання — підкаже, що відбувається у серці;\n"
+        "   💼 Кар’єра — розповість, куди веде твій професійний шлях;\n"
+        "   💰 Гроші — відкриє фінансову перспективу й поради для достатку.\n\n"
+        "📦 <b>Моя скринька</b> — тут зберігається твоя магічна статистика: "
+        "скільки друзів ти запросив, скільки розкладів залишилось і які бонуси вже отримав ✨\n\n"
+        "❓ <b>Як працює бот</b> — коротка інструкція, якщо хочеш освіжити пам’ять про всі можливості.\n\n"
+        "Ну що, готовий до магії? Єнот уже потирає лапки і тасує карти... 🃏💫"
+    )
+
     await update.message.reply_text(
-        f"Привіт, {user.first_name or 'друже'}! Я Містичний Єнот — твій гід у світі Таро 🦝🔮\n\n"
-        "Обери дію нижче 👇",
+        welcome_text,
         reply_markup=markup,
+        parse_mode="HTML"
     )
 
 # ---------------------------------------------------------------------------
@@ -81,7 +98,6 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_choice = update.message.text
 
-    # 🩷 Категорія: Любов
     if user_choice == "💞 Любов":
         category = "love"
         phrases = [
@@ -89,8 +105,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
             "Шурхіт карт шепоче про почуття, які пробуджують душу 💕",
             "Єнот підморгує: «Любов — це завжди трохи ризик і багато магії!» 💌",
         ]
-
-    # 💼 Категорія: Кар’єра
     elif user_choice == "💼 Кар’єра":
         category = "career"
         phrases = [
@@ -98,8 +112,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
             "Повітря наповнюється амбіціями... Всесвіт готує підвищення ✨",
             "Карти блищать діловим настроєм — настав час діяти впевнено 💪",
         ]
-
-    # 💰 Категорія: Гроші
     elif user_choice == "💰 Гроші":
         category = "money"
         phrases = [
@@ -107,15 +119,12 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
             "Монетки дзвенять у повітрі... Всесвіт готує нагороду ✨",
             "Єнот шепоче: «Гроші — це енергія, давай побачимо, як вона тече сьогодні.» 🪙",
         ]
-
     else:
         return
 
-    # ✨ Передмова перед картою
     intro_text = random.choice(phrases)
     await update.message.reply_text(intro_text)
 
-    # 🎴 Випадкова карта
     card = random.choice(cards)
     context.user_data["last_card"] = (card, category)
 
@@ -161,8 +170,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if text == "🃏 Карта дня":
         await get_daily_card(update, context)
+
     elif text == "Як працює бот ❓":
-        await update.message.reply_text("Цей бот витягує карти Таро та дає тобі поради 😉")
+        how_it_works_text = (
+            "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
+            "Цей бот — не просто набір карт, а справжній портал у світ Таро 🌙\n"
+            "Його місія — допомогти тобі краще зрозуміти себе, свої почуття "
+            "та напрямок, у якому рухається твоє життя 💫\n\n"
+            "Ось як усе працює:\n\n"
+            "🃏 <b>Карта дня</b> — кожного дня ти можеш тягнути одну карту. "
+            "Вона підкаже енергію доби і як краще використати її силу 🌞\n\n"
+            "🔮 <b>Категорії розкладів</b> — обери напрямок, який тебе цікавить:\n"
+            "   💞 <b>Кохання</b> — усе про стосунки, симпатії та серцеві пригоди.\n"
+            "   💼 <b>Кар’єра</b> — про роботу, розвиток і твоє покликання.\n"
+            "   💰 <b>Гроші</b> — про фінанси, удачу і правильні рішення.\n\n"
+            "📦 <b>Моя скринька</b> — тут зберігається твоя магічна статистика: "
+            "скільки друзів ти запросив, скільки розкладів зробив і які бонуси отримав.\n\n"
+            "🎁 <b>Запроси друга</b> — за кожного запрошеного Єнот дарує бонусні розклади! "
+            "Чим більше друзів — тим більше магії ✨\n\n"
+            "Порада Єнота: <i>вір у себе, грай з долею легко, і пам’ятай — "
+            "навіть дрібні збіги часто є знаками Всесвіту 💫</i>"
+        )
+
+        await update.message.reply_text(how_it_works_text, parse_mode="HTML")
+
     elif text == "Категорії розкладів":
         await show_categories(update, context)
     elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
@@ -177,7 +208,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # ---------------------------------------------------------------------------
 
 def configure_logging() -> None:
-    """Configure application-wide logging once."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -186,7 +216,6 @@ def configure_logging() -> None:
 # ---------------------------------------------------------------------------
 
 def build_application(token: str) -> Application:
-    """Create and configure the Telegram application instance."""
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -210,7 +239,6 @@ def main() -> None:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
 
     app = build_application(token)
-
     LOGGER.info("✅ Бот запущений та очікує оновлення")
     app.run_polling()
 
