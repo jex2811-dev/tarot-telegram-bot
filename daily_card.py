@@ -1,9 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from random import choice
+import random
 from cards import cards
 from gsheets_helper import add_history, has_received_card_today
-
 
 # ---------------------------------------------------------------------------
 # 🃏 Карта дня
@@ -19,10 +18,18 @@ async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 🔹 Випадкова карта
-    card = choice(cards)
+    card = random.choice(cards)
     title = card["title"]
-    description = card["meanings"]["day"]["description"]
     photo_url = card["photo_url"]
+
+    # 🔹 Беремо випадковий опис і коментар Єнота
+    meanings = card["meanings"].get("day", {})
+    if "descriptions" in meanings and "raccoons" in meanings:
+        description = random.choice(meanings["descriptions"])
+        raccoon = random.choice(meanings["raccoons"])
+    else:
+        description = "Ця карта ще не має опису для карти дня 🌙"
+        raccoon = "Єнот ще не встиг написати тлумачення... але каже, що все буде добре 🦝✨"
 
     # 🔹 Додаємо запис в історію
     add_history(user_id=user_id, spread_type="Карта дня", cards=title)
@@ -39,9 +46,11 @@ async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-    # 🔹 Зберігаємо карту для інтерпретації
-    context.user_data["last_card"] = card
-
+    # 🔹 Зберігаємо карту і тлумачення
+    context.user_data["last_card"] = {
+        "card": card,
+        "raccoon": raccoon
+    }
 
 # ---------------------------------------------------------------------------
 # 🦝 Тлумачення від Єнота
@@ -49,14 +58,12 @@ async def raccoon_interpretation_callback(update: Update, context: ContextTypes.
     query = update.callback_query
     await query.answer()
 
-    card = context.user_data.get("last_card")
-    if not card:
-        await query.edit_message_text(
-            "🤷‍♂️ Єнот загубив карту... Спробуй витягнути нову 🃏"
-        )
+    last_card_data = context.user_data.get("last_card")
+    if not last_card_data:
+        await query.edit_message_text("🤷‍♂️ Єнот загубив карту... Спробуй витягнути нову 🃏")
         return
 
-    raccoon_text = card["meanings"]["day"]["raccoon"]
+    raccoon_text = last_card_data.get("raccoon", "Єнот задумався... спробуй ще раз 🦝💫")
 
     await query.message.reply_text(
         f"🦝 <b>Що думає Єнот:</b>\n\n{raccoon_text}",
