@@ -6,7 +6,9 @@ import logging
 import os
 import random
 import time
+import threading
 from typing import Final
+from flask import Flask
 
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import (
@@ -35,14 +37,27 @@ REPLY_KEYBOARD: Final[list[list[str]]] = [
 
 # ---------------------------------------------------------------------------
 
+def run_health_server():
+    """🦝 Flask-сервер для keep-alive, щоб Render не засинав."""
+    app = Flask(__name__)
+
+    @app.route("/")
+    def index():
+        return "🦝 MysticEnotBot is alive and shuffling cards! ✨"
+
+    # Запуск у фоні
+    thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True)
+    thread.start()
+    LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
+
+# ---------------------------------------------------------------------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Реєстрація нового користувача + перевірка реферального посилання"""
     user = update.effective_user
     args = context.args
 
-    referred_by = None
-    if args:
-        referred_by = args[0] if args[0].startswith("REF") else None
+    referred_by = args[0] if args and args[0].startswith("REF") else None
 
     add_user(
         user_id=str(user.id),
@@ -90,7 +105,6 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вибір категорії: любов, кар’єра або гроші"""
     user = update.effective_user
     user_info = get_user_info(str(user.id))
     available_spreads = int(user_info.get("available_spreads", 0))
@@ -104,12 +118,10 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    # 🔄 Зменшуємо кількість карт
     from gsheets_helper import find_user_row, get_col_index
     row_index, _ = find_user_row(str(user.id))
     users_sheet.update_cell(row_index, get_col_index("available_spreads"), available_spreads - 1)
 
-    # 🧩 Визначаємо категорію
     user_choice = update.message.text
     if user_choice == "💞 Любов":
         category = "love"
@@ -137,7 +149,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
 
     await update.message.reply_text(random.choice(phrases))
 
-    # 🎴 Вибираємо випадкову карту
     card = random.choice(cards)
     meanings = card["meanings"].get(category)
 
@@ -154,20 +165,15 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         photo=card["photo_url"],
         caption=f"<b>{card['title']}</b>\n\n{description}",
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardMarkup(
-            [["🦝 Коментар Єнота"], ["⬅️ Назад"]],
-            resize_keyboard=True
-        ),
+        reply_markup=ReplyKeyboardMarkup([["🦝 Коментар Єнота"], ["⬅️ Назад"]], resize_keyboard=True),
     )
 
 # ---------------------------------------------------------------------------
 
 async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показує тлумачення від Єнота для останньої карти"""
     if "last_card" not in context.user_data:
         await update.message.reply_text("Спочатку обери категорію 💫")
         return
-
     card, category, raccoon = context.user_data["last_card"]
     await update.message.reply_text(f"🦝 {raccoon}")
 
@@ -186,7 +192,6 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referral_code = user_data["referral_code"]
         referral_link = f"https://t.me/TaroEnotBot?start={referral_code}"
 
-        # 🏅 Рівень користувача
         if referrals_count < 3:
             rank = "🌱 Молодий шаман"
         elif referrals_count < 6:
@@ -221,93 +226,13 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
         "Ти потрапив у магічний простір, де <i>кожна карта Таро</i> — це дзеркало твого дня, думок і відчуттів 🌙\n\n"
         "───────────────\n"
-        "🃏 <b>Карта дня</b>\n"
-        "Щоранку Єнот тягне карту, яка показує твою енергію на сьогодні.\n"
-        "— Кожного дня нова карта 🌞\n"
-        "— Глибокий опис і коментар від Єнота 🦝\n"
-        "— Допомагає налаштуватися, зрозуміти настрій та знайти підказку від Всесвіту.\n\n"
-        "───────────────\n"
-        "🔮 <b>Розкласти карти</b>\n"
-        "Обери тему, яка тебе хвилює сьогодні:\n"
-        "💞 <b>Любов</b> — підказки про стосунки, емоції, нові зустрічі.\n"
-        "💼 <b>Кар’єра</b> — мотивація, розвиток, ідеї для дій.\n"
-        "💰 <b>Гроші</b> — фінансовий потік, енергія достатку.\n\n"
-        "Для кожної теми Єнот обирає випадкову карту і унікальний опис, тож навіть та сама карта може звучати по-новому ✨\n\n"
-        "───────────────\n"
-        "📦 <b>Моя скринька</b>\n"
-        "Тут зберігаються твої магічні ресурси:\n"
-        "— скільки <b>розкладів</b> залишилось;\n"
-        "— скільки <b>друзів</b> ти запросив;\n"
-        "— твій <b>рівень</b> (Молодий шаман, Учень, Майстер Єнотової магії) 🪄\n\n"
-        "───────────────\n"
-        "🎁 <b>Реферальна система</b>\n"
-        "Єнот щедрий на подарунки:\n"
-        "— Запроси друга через своє посилання зі «Скриньки» 🔗\n"
-        "— За кожного нового учасника отримай <b>+3 додаткові розклади</b> 💫\n"
-        "— Чим більше друзів — тим більше карт і бонусів!\n\n"
-        "───────────────\n"
-        "🌕 <b>Що ще важливо</b>\n"
-        "— Карти обираються випадково, але не просто так — кожна несе потрібне повідомлення саме для тебе.\n"
-        "— Єнот не передбачає майбутнє — він допомагає побачити <i>теперішнє ясніше</i> 🕯️\n\n"
-        "───────────────\n"
-        "🦝 <b>Єнот каже:</b>\n"
-        "<i>«Твій шлях — це історія, яку ти твориш кожним вибором. А карти — лише ліхтарики, що підсвічують дорогу.»</i> 🌙✨"
+        "🃏 <b>Карта дня</b> — щоденна енергія та підказка.\n"
+        "🔮 <b>Розкласти карти</b> — теми любові, кар’єри й грошей.\n"
+        "📦 <b>Моя скринька</b> — твої бонуси та рівень мага.\n"
+        "🎁 <b>Запрошуй друзів</b> — отримуй карти за рефералів.\n\n"
+        "Єнот шепоче: <i>«Навіть випадкові карти — це не випадковість» 🌙</i>"
     )
     await update.message.reply_text(text, parse_mode="HTML")
-
-# ---------------------------------------------------------------------------
-
-async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Повертаємось у головне меню 🦝",
-        reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
-    )
-
-# ---------------------------------------------------------------------------
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Головна логіка — з антидублюванням"""
-    if context.user_data.get("is_processing", False):
-        return
-    context.user_data["is_processing"] = True
-
-    try:
-        text = update.message.text
-
-        if text == "🃏 Карта дня":
-            await get_daily_card(update, context)
-        elif text == "Моя скринька 📦":
-            await show_my_chest(update, context)
-        elif text == "🔗 Скопіювати реферальне посилання":
-            user = update.effective_user
-            user_data = get_user_info(str(user.id))
-            link = f"https://t.me/TaroEnotBot?start={user_data['referral_code']}"
-            await update.message.reply_text(
-                f"🔗 Ось твоє посилання, щоб запросити друзів:\n{link}\n\n"
-                "Єнот каже: «Кидай його друзям і отримай +3 карти за кожного!» 🦝💫"
-            )
-        elif text == "Як працює бот ❓":
-            await send_how_it_works(update, context)
-        elif text == "🔮 Розкласти карти":
-            await show_categories(update, context)
-        elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
-            await handle_category_choice(update, context)
-        elif text == "🦝 Коментар Єнота":
-            await show_raccoon_comment(update, context)
-        elif text == "⬅️ Назад":
-            await go_back(update, context)
-        else:
-            await update.message.reply_text("Оберіть команду з меню ⬇️")
-    finally:
-        context.user_data["is_processing"] = False
-
-# ---------------------------------------------------------------------------
-
-def configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
 
 # ---------------------------------------------------------------------------
 
@@ -321,15 +246,18 @@ def build_application(token: str) -> Application:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    configure_logging()
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
 
+    run_health_server()  # ✅ Flask keep-alive
+
     app = build_application(token)
     LOGGER.info("✅ Бот запущений та очікує оновлення")
 
-    # 🔁 Автоматичний перезапуск polling при збоях
     while True:
         try:
             app.run_polling()
