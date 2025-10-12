@@ -198,41 +198,49 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------------------------------------------------------------------
 
+# 🛡️ Антидубль-захист у handle_message
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    if context.user_data.get("is_processing", False):
+        return
+    context.user_data["is_processing"] = True
 
-    if text == "🃏 Карта дня":
-        await get_daily_card(update, context)
-    elif text == "Моя скринька 📦":
-        await show_my_chest(update, context)
-    elif text == "🔗 Скопіювати реферальне посилання":
-        user = update.effective_user
-        user_data = get_user_info(str(user.id))
-        link = f"https://t.me/TaroEnotBot?start={user_data['referral_code']}"
-        await update.message.reply_text(
-            f"🔗 Ось твоє посилання, щоб запросити друзів:\n{link}\n\n"
-            "Єнот каже: «Кидай його друзям і отримай +3 карти за кожного!» 🦝💫"
-        )
-    elif text == "Як працює бот ❓":
-        await update.message.reply_text(
-            "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
-            "🃏 Карта дня — щоденний гід.\n"
-            "🔮 Категорії розкладів — любов, кар’єра, гроші.\n"
-            "📦 Моя скринька — бонуси та статистика.\n"
-            "🎁 Запрошуй друзів і отримуй карти!\n\n"
-            "<i>Єнот шепоче: навіть випадкові карти — це не випадковість 🌙</i>",
-            parse_mode="HTML",
-        )
-    elif text == "Категорії розкладів":
-        await show_categories(update, context)
-    elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
-        await handle_category_choice(update, context)
-    elif text == "🦝 Коментар Єнота":
-        await show_raccoon_comment(update, context)
-    elif text == "⬅️ Назад":
-        await go_back(update, context)
-    else:
-        await update.message.reply_text("Оберіть команду з меню ⬇️")
+    try:
+        text = update.message.text
+
+        if text == "🃏 Карта дня":
+            await get_daily_card(update, context)
+        elif text == "Моя скринька 📦":
+            await show_my_chest(update, context)
+        elif text == "🔗 Скопіювати реферальне посилання":
+            user = update.effective_user
+            user_data = get_user_info(str(user.id))
+            link = f"https://t.me/TaroEnotBot?start={user_data['referral_code']}"
+            await update.message.reply_text(
+                f"🔗 Ось твоє посилання, щоб запросити друзів:\n{link}\n\n"
+                "Єнот каже: «Кидай його друзям і отримай +3 карти за кожного!» 🦝💫"
+            )
+        elif text == "Як працює бот ❓":
+            await update.message.reply_text(
+                "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
+                "🃏 Карта дня — щоденний гід.\n"
+                "🔮 Категорії розкладів — любов, кар’єра, гроші.\n"
+                "📦 Моя скринька — бонуси та статистика.\n"
+                "🎁 Запрошуй друзів і отримуй карти!\n\n"
+                "<i>Єнот шепоче: навіть випадкові карти — це не випадковість 🌙</i>",
+                parse_mode="HTML",
+            )
+        elif text == "Категорії розкладів":
+            await show_categories(update, context)
+        elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
+            await handle_category_choice(update, context)
+        elif text == "🦝 Коментар Єнота":
+            await show_raccoon_comment(update, context)
+        elif text == "⬅️ Назад":
+            await go_back(update, context)
+        else:
+            await update.message.reply_text("Оберіть команду з меню ⬇️")
+    finally:
+        context.user_data["is_processing"] = False
 
 # ---------------------------------------------------------------------------
 
