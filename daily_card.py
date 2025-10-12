@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from random import choice
 from cards import cards
@@ -6,11 +6,11 @@ from gsheets_helper import add_history, has_received_card_today
 
 
 # ---------------------------------------------------------------------------
-# 🃏 Отримати карту дня
+# 🃏 Карта дня
 async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
 
-    # 🔹 Перевірка — чи користувач вже отримував карту сьогодні
+    # 🔹 Перевіряємо, чи вже отримував сьогодні
     if has_received_card_today(user_id):
         await update.message.reply_text(
             "🕘 Ти вже отримав свою карту дня сьогодні.\n"
@@ -18,41 +18,33 @@ async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 🔮 Випадкова карта
+    # 🔹 Випадкова карта
     card = choice(cards)
     title = card["title"]
     description = card["meanings"]["day"]["description"]
-    photo = card["photo_url"]
+    photo_url = card["photo_url"]
 
-    # 🗃 Зберігаємо в історію
+    # 🔹 Додаємо запис в історію
     add_history(user_id=user_id, spread_type="Карта дня", cards=title)
 
-    # 🔹 Кнопка “Тлумачення від Єнота”
-    keyboard = [
-        [InlineKeyboardButton("Що думає Єнот 🦝", callback_data="raccoon_interpretation")]
-    ]
+    # 🔹 Кнопка "Що думає Єнот 🦝"
+    keyboard = [[InlineKeyboardButton("Що думає Єнот 🦝", callback_data="raccoon_interpretation")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # 🖼 Надсилаємо зображення з описом
-    try:
-        await update.message.reply_photo(
-            photo=photo,
-            caption=f"<b>{title}</b>\n\n{description}",
-            reply_markup=reply_markup,
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        await update.message.reply_text(
-            f"⚠️ Не вдалося завантажити зображення для карти: {title}\nПомилка: {e}"
-        )
-        return
+    # 🔹 Відправляємо фото з описом
+    await update.message.reply_photo(
+        photo=photo_url,
+        caption=f"<b>{title}</b>\n\n{description}",
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
 
-    # 💾 Зберігаємо карту для подальшого тлумачення від Єнота
+    # 🔹 Зберігаємо карту для інтерпретації
     context.user_data["last_card"] = card
 
 
 # ---------------------------------------------------------------------------
-# 🦝 Інтерпретація від Єнота
+# 🦝 Тлумачення від Єнота
 async def raccoon_interpretation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -60,11 +52,10 @@ async def raccoon_interpretation_callback(update: Update, context: ContextTypes.
     card = context.user_data.get("last_card")
     if not card:
         await query.edit_message_text(
-            "🤷‍♂️ Єнот загубив карту... спробуй витягнути нову 🃏"
+            "🤷‍♂️ Єнот загубив карту... Спробуй витягнути нову 🃏"
         )
         return
 
-    # 🦝 Беремо тлумачення саме з категорії 'day'
     raccoon_text = card["meanings"]["day"]["raccoon"]
 
     await query.message.reply_text(
