@@ -90,6 +90,7 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вибір категорії: любов, кар’єра або гроші"""
     user = update.effective_user
     user_info = get_user_info(str(user.id))
     available_spreads = int(user_info.get("available_spreads", 0))
@@ -136,24 +137,39 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
 
     await update.message.reply_text(random.choice(phrases))
 
+    # 🎴 Вибираємо випадкову карту
     card = random.choice(cards)
-    context.user_data["last_card"] = (card, category)
+    meanings = card["meanings"].get(category)
+
+    if meanings and "descriptions" in meanings and "raccoons" in meanings:
+        description = random.choice(meanings["descriptions"])
+        raccoon = random.choice(meanings["raccoons"])
+    else:
+        description = "Ця карта ще не має опису для цієї категорії."
+        raccoon = "Єнот мовчить, бо ще пише маніфест 🦝🖋️"
+
+    context.user_data["last_card"] = (card, category, raccoon)
 
     await update.message.reply_photo(
         photo=card["photo_url"],
-        caption=f"<b>{card['title']}</b>\n\n{card['meanings'][category]['description']}",
+        caption=f"<b>{card['title']}</b>\n\n{description}",
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardMarkup([["🦝 Коментар Єнота"], ["⬅️ Назад"]], resize_keyboard=True),
+        reply_markup=ReplyKeyboardMarkup(
+            [["🦝 Коментар Єнота"], ["⬅️ Назад"]],
+            resize_keyboard=True
+        ),
     )
 
 # ---------------------------------------------------------------------------
 
 async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показує тлумачення від Єнота для останньої карти"""
     if "last_card" not in context.user_data:
         await update.message.reply_text("Спочатку обери категорію 💫")
         return
-    card, category = context.user_data["last_card"]
-    await update.message.reply_text(f"🦝 {card['meanings'][category]['raccoon']}")
+
+    card, category, raccoon = context.user_data["last_card"]
+    await update.message.reply_text(f"🦝 {raccoon}")
 
 # ---------------------------------------------------------------------------
 
@@ -282,7 +298,7 @@ def main() -> None:
             app.run_polling()
         except Exception as e:
             LOGGER.error(f"❌ Помилка виконання polling: {e}")
-            time.sleep(10)  # перезапуск через 10 секунд
+            time.sleep(10)
 
 # ---------------------------------------------------------------------------
 
