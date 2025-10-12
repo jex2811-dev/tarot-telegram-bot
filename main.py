@@ -26,7 +26,6 @@ from gsheets_helper import add_user, get_user_info, users_sheet
 from cards import cards
 
 # ---------------------------------------------------------------------------
-
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # 🏠 Головне меню
@@ -36,7 +35,7 @@ REPLY_KEYBOARD: Final[list[list[str]]] = [
 ]
 
 # ---------------------------------------------------------------------------
-
+# 🌐 Flask Keep-Alive Server
 def run_health_server():
     """🦝 Flask-сервер для keep-alive, щоб Render не засинав."""
     app = Flask(__name__)
@@ -51,12 +50,10 @@ def run_health_server():
     LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
 
 # ---------------------------------------------------------------------------
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Реєстрація нового користувача + перевірка реферального посилання"""
+# 🪄 Команда /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
-
     referred_by = args[0] if args and args[0].startswith("REF") else None
 
     add_user(
@@ -88,22 +85,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
-
+# 🔮 Показ категорій
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["💞 Любов", "💼 Кар’єра", "💰 Гроші"], ["⬅️ Назад"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
     phrases = [
         "Єнот тасує карти... Куди зазирнемо сьогодні? 🔮🦝",
         "Серце, гаманець чи кар’єра? Обери свій шлях 💞💰💼",
         "Любов, гроші чи слава — що підкаже Всесвіт сьогодні? 💫",
         "Єнот підморгує: «Кохання чи кар’єра? Обери, поки карти гарячі!» 🔥",
     ]
-
     await update.message.reply_text(random.choice(phrases), reply_markup=reply_markup)
 
 # ---------------------------------------------------------------------------
-
+# 🃏 Обробка категорії
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_info = get_user_info(str(user.id))
@@ -125,29 +120,12 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
     user_choice = update.message.text
     if user_choice == "💞 Любов":
         category = "love"
-        phrases = [
-            "Єнот чує биття серця… любов наближається 💞",
-            "Шурхіт карт шепоче про почуття, які пробуджують душу 💕",
-            "Єнот підморгує: «Любов — це завжди трохи ризик і багато магії!» 💌",
-        ]
     elif user_choice == "💼 Кар’єра":
         category = "career"
-        phrases = [
-            "Єнот поправляє краватку: «Працюємо на успіх!» 💼",
-            "Повітря наповнюється амбіціями... Всесвіт готує підвищення ✨",
-            "Карти блищать діловим настроєм — настав час діяти впевнено 💪",
-        ]
     elif user_choice == "💰 Гроші":
         category = "money"
-        phrases = [
-            "Єнот потирає лапки: «Пахне фінансовими можливостями!» 💰",
-            "Монетки дзвенять у повітрі... Всесвіт готує нагороду ✨",
-            "Єнот шепоче: «Гроші — це енергія, давай побачимо, як вона тече сьогодні.» 🪙",
-        ]
     else:
         return
-
-    await update.message.reply_text(random.choice(phrases))
 
     card = random.choice(cards)
     meanings = card["meanings"].get(category)
@@ -169,16 +147,16 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 # ---------------------------------------------------------------------------
-
+# 🦝 Коментар від Єнота
 async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "last_card" not in context.user_data:
         await update.message.reply_text("Спочатку обери категорію 💫")
         return
-    card, category, raccoon = context.user_data["last_card"]
+    _, _, raccoon = context.user_data["last_card"]
     await update.message.reply_text(f"🦝 {raccoon}")
 
 # ---------------------------------------------------------------------------
-
+# 📦 Моя скринька
 async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -199,43 +177,59 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             rank = "🦝 Майстер Єнотової магії"
 
-        moons = ["🌑🌑🌑", "🌕🌑🌑", "🌕🌕🌑", "🌕🌕🌕"]
-        moon = moons[min(available_spreads, 3)]
-
         chest_text = (
             f"📦 <b>Моя магічна скринька</b>\n\n"
-            f"🔮 <b>Доступних розкладів:</b> {available_spreads} {moon}\n"
-            f"💞 <b>Запрошено друзів:</b> {referrals_count}\n"
-            f"🏅 <b>Рівень:</b> {rank}\n\n"
-            f"🔗 <b>Твій реферальний код:</b> <code>{referral_code}</code>\n\n"
-            f"✨ <b>Посилання для друзів:</b>\n{referral_link}\n\n"
+            f"🔮 Доступних розкладів: {available_spreads}\n"
+            f"💞 Запрошено друзів: {referrals_count}\n"
+            f"🏅 Рівень: {rank}\n\n"
+            f"🔗 <b>Твоє посилання:</b>\nhttps://t.me/TaroEnotBot?start={referral_code}\n\n"
             "Єнот каже: «Ділися магією — і вона повернеться втричі!» 🦝💫"
         )
 
-        keyboard = [["🔗 Скопіювати реферальне посилання"], ["⬅️ Назад"]]
-        await update.message.reply_text(chest_text, parse_mode="HTML",
-                                        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+        await update.message.reply_text(chest_text, parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text("⚠️ Єнот заплутався у магії Google Sheets... Спробуй ще раз 🦝✨")
         print("❌ Помилка в show_my_chest:", e)
 
 # ---------------------------------------------------------------------------
-
+# 📘 Як працює бот
 async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
-        "Ти потрапив у магічний простір, де <i>кожна карта Таро</i> — це дзеркало твого дня, думок і відчуттів 🌙\n\n"
-        "───────────────\n"
-        "🃏 <b>Карта дня</b> — щоденна енергія та підказка.\n"
-        "🔮 <b>Розкласти карти</b> — теми любові, кар’єри й грошей.\n"
+        "🃏 <b>Карта дня</b> — щоденна підказка Всесвіту.\n"
+        "🔮 <b>Розкласти карти</b> — любов, кар’єра, гроші.\n"
         "📦 <b>Моя скринька</b> — твої бонуси та рівень мага.\n"
         "🎁 <b>Запрошуй друзів</b> — отримуй карти за рефералів.\n\n"
-        "Єнот шепоче: <i>«Навіть випадкові карти — це не випадковість» 🌙</i>"
+        "<i>Єнот шепоче: навіть випадкові карти — не випадковість 🌙</i>"
     )
     await update.message.reply_text(text, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
+# 🧭 Головний обробник повідомлень
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
 
+    if text == "🃏 Карта дня":
+        await get_daily_card(update, context)
+    elif text == "🔮 Розкласти карти":
+        await show_categories(update, context)
+    elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
+        await handle_category_choice(update, context)
+    elif text == "🦝 Коментар Єнота":
+        await show_raccoon_comment(update, context)
+    elif text == "Моя скринька 📦":
+        await show_my_chest(update, context)
+    elif text == "Як працює бот ❓":
+        await send_how_it_works(update, context)
+    elif text == "⬅️ Назад":
+        await update.message.reply_text(
+            "Повертаємось у головне меню 🦝",
+            reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True),
+        )
+    else:
+        await update.message.reply_text("Оберіть команду з меню ⬇️")
+
+# ---------------------------------------------------------------------------
 def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
@@ -244,8 +238,7 @@ def build_application(token: str) -> Application:
     return app
 
 # ---------------------------------------------------------------------------
-
-def main() -> None:
+def main():
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
@@ -253,8 +246,7 @@ def main() -> None:
     if not token:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
 
-    run_health_server()  # ✅ Flask keep-alive
-
+    run_health_server()
     app = build_application(token)
     LOGGER.info("✅ Бот запущений та очікує оновлення")
 
@@ -266,6 +258,5 @@ def main() -> None:
             time.sleep(10)
 
 # ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     main()
