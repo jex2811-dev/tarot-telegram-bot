@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import time
 from typing import Final
 
 from telegram import ReplyKeyboardMarkup, Update
@@ -271,9 +272,17 @@ def main() -> None:
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
+
     app = build_application(token)
     LOGGER.info("✅ Бот запущений та очікує оновлення")
-    app.run_polling()
+
+    # 🔁 Автоматичний перезапуск polling при збоях
+    while True:
+        try:
+            app.run_polling()
+        except Exception as e:
+            LOGGER.error(f"❌ Помилка виконання polling: {e}")
+            time.sleep(10)  # перезапуск через 10 секунд
 
 # ---------------------------------------------------------------------------
 
