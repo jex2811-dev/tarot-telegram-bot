@@ -1,7 +1,6 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, date
-import random
 
 # 🔹 ID твоєї таблиці Google Sheets
 SHEET_ID = "1c5mZaUnlkHH3EGWBbbYwujYXZkM-1bRN_vkNEsQy_5M"
@@ -21,17 +20,15 @@ history_sheet = client.open_by_key(SHEET_ID).worksheet("history")
 # 🧭 Знайти користувача в таблиці
 def find_user_row(user_id: str):
     records = users_sheet.get_all_records()
-    for i, row in enumerate(records, start=2):  # start=2 — пропускаємо заголовок
+    for i, row in enumerate(records, start=2):
         if str(row.get("id")) == str(user_id):
             return i, row
     return None, None
-
 
 # ---------------------------------------------------------------------------
 # 🪄 Генеруємо унікальний реферальний код
 def generate_referral_code(user_id: str) -> str:
     return f"REF{user_id}"
-
 
 # ---------------------------------------------------------------------------
 # 🔍 Знаходимо користувача за реферальним кодом
@@ -41,7 +38,6 @@ def find_user_by_referral_code(ref_code: str):
         if row.get("referral_code") == ref_code:
             return i, row
     return None, None
-
 
 # ---------------------------------------------------------------------------
 # 🧙‍♂️ Додаємо нового користувача (з реферальною системою +3 обом)
@@ -90,26 +86,19 @@ def add_user(user_id, username, first_name, referral_code="NONE", referred_by=No
         first_name,
         user_referral_code,
         referred_by or "NONE",
-        available_spreads,  # 🔮 карти з бонусом (3 або 6)
+        available_spreads,
         referrals_count,
-        today,  # last_reset
-        now,  # created_at
+        today,
+        now,
     ]
     users_sheet.append_row(new_user)
     print(f"✅ Новий користувач доданий: {first_name} ({username})")
-
-    # -----------------------------------------------------------------------
-    # 🦝 Повідомлення у лог
-    if referred_by and 'ref_user' in locals() and ref_user:
-        print(f"💫 Бонус! {ref_user.get('first_name')} отримав +3 карти, {first_name} — теж +3.")
-
 
 # ---------------------------------------------------------------------------
 # 🧾 Отримуємо номер колонки за назвою
 def get_col_index(name: str) -> int:
     headers = users_sheet.row_values(1)
     return headers.index(name) + 1
-
 
 # ---------------------------------------------------------------------------
 # 🔄 Щоденне оновлення карт (3/день)
@@ -125,7 +114,6 @@ def update_daily_spreads(user_id: str):
         users_sheet.update_cell(row_index, get_col_index("available_spreads"), 3)
         users_sheet.update_cell(row_index, get_col_index("last_reset"), today)
         print(f"🔄 Оновлено денний ліміт для {user.get('first_name')}")
-
 
 # ---------------------------------------------------------------------------
 # 📦 Отримати інформацію користувача (для “Моя скринька 📦”)
@@ -157,14 +145,12 @@ def get_user_info(user_id: str):
         "available_spreads_col": get_col_index("available_spreads"),
     }
 
-
 # ---------------------------------------------------------------------------
 # 🕓 Додаємо запис в історію (карти, категорії)
 def add_history(user_id, spread_type, cards):
     today = datetime.utcnow().strftime("%Y-%m-%d")
     row = [user_id, spread_type, cards, today]
     history_sheet.append_row(row)
-
 
 # ---------------------------------------------------------------------------
 # 🔍 Перевіряємо: чи вже видавалась карта дня
