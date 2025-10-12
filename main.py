@@ -98,9 +98,31 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=reply_markup)
 
 # ---------------------------------------------------------------------------
+# 🎴 Обробка вибору категорії (з перевіркою доступних карт)
+from gsheets_helper import users_sheet
 
-# 🎴 Обробка вибору категорії
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_info = get_user_info(str(user.id))
+
+    # 🔍 Перевірка кількості карт
+    available_spreads = int(user_info.get("available_spreads", 0))
+
+    if available_spreads <= 0:
+        await update.message.reply_text(
+            "🃏 У тебе закінчились карти на сьогодні!\n\n"
+            "Повертайся завтра 🌙 або запроси друга, щоб отримати +3 бонусні карти 💫\n\n"
+            "Натисни 📦 <b>Моя скринька</b>, щоб дізнатись більше.",
+            parse_mode="HTML"
+        )
+        return
+
+    # Зменшуємо кількість карт після використання
+    user_row = user_info["row_index"]
+    new_value = available_spreads - 1
+    users_sheet.update_cell(user_row, user_info["available_spreads_col"], new_value)
+
+    # 🔮 Далі стандартна логіка
     user_choice = update.message.text
 
     if user_choice == "💞 Любов":
@@ -148,7 +170,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 # ---------------------------------------------------------------------------
-
 # 🦝 Тлумачення від Єнота
 async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "last_card" not in context.user_data:
@@ -175,9 +196,19 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     referral_code = user_data["referral_code"]
     referral_link = f"https://t.me/TaroEnotBot?start={referral_code}"
 
+    # 🌕🌗🌑 Візуальний індикатор
+    if available_spreads == 3:
+        moon = "🌕🌕🌕"
+    elif available_spreads == 2:
+        moon = "🌕🌕🌑"
+    elif available_spreads == 1:
+        moon = "🌕🌑🌑"
+    else:
+        moon = "🌑🌑🌑"
+
     chest_text = (
         f"📦 <b>Моя магічна скринька</b>\n\n"
-        f"🔮 <b>Доступних розкладів:</b> {available_spreads}\n"
+        f"🔮 <b>Доступних розкладів:</b> {available_spreads} {moon}\n"
         f"💞 <b>Запрошено друзів:</b> {referrals_count}\n"
         f"🔗 <b>Твій реферальний код:</b> <code>{referral_code}</code>\n\n"
         f"✨ <b>Посилання для друзів:</b>\n{referral_link}\n\n"
@@ -193,14 +224,12 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(chest_text, parse_mode="HTML", reply_markup=reply_markup)
 
 # ---------------------------------------------------------------------------
-
-# 🔙 Назад у головне меню
+# 🔙 Назад
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
     await update.message.reply_text("Повертаємось у головне меню 🦝", reply_markup=reply_markup)
 
 # ---------------------------------------------------------------------------
-
 # 🧩 Основний обробник повідомлень
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
@@ -225,22 +254,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif text == "Як працює бот ❓":
         how_it_works_text = (
             "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
-            "Цей бот — не просто набір карт, а справжній портал у світ Таро 🌙\n"
-            "Його місія — допомогти тобі краще зрозуміти себе, свої почуття "
-            "та напрямок, у якому рухається твоє життя 💫\n\n"
-            "Ось як усе працює:\n\n"
-            "🃏 <b>Карта дня</b> — кожного дня ти можеш тягнути одну карту. "
-            "Вона підкаже енергію доби і як краще використати її силу 🌞\n\n"
-            "🔮 <b>Категорії розкладів</b> — обери напрямок, який тебе цікавить:\n"
-            "   💞 <b>Кохання</b> — усе про стосунки, симпатії та серцеві пригоди.\n"
-            "   💼 <b>Кар’єра</b> — про роботу, розвиток і твоє покликання.\n"
-            "   💰 <b>Гроші</b> — про фінанси, удачу і правильні рішення.\n\n"
-            "📦 <b>Моя скринька</b> — тут зберігається твоя магічна статистика: "
-            "скільки друзів ти запросив, скільки розкладів зробив і які бонуси отримав.\n\n"
-            "🎁 <b>Запроси друга</b> — за кожного запрошеного Єнот дарує бонусні розклади! "
-            "Чим більше друзів — тим більше магії ✨\n\n"
-            "Порада Єнота: <i>вір у себе, грай з долею легко, і пам’ятай — "
-            "навіть дрібні збіги часто є знаками Всесвіту 💫</i>"
+            "🃏 <b>Карта дня</b> — твій щоденний гід.\n"
+            "🔮 <b>Категорії розкладів</b> — любов, кар’єра, гроші.\n"
+            "📦 <b>Моя скринька</b> — бонуси та статистика.\n"
+            "🎁 Запрошуй друзів і отримуй карти!\n\n"
+            "<i>Єнот шепоче: навіть випадкові карти — це не випадковість 🌙</i>"
         )
         await update.message.reply_text(how_it_works_text, parse_mode="HTML")
 
@@ -256,7 +274,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
 # ---------------------------------------------------------------------------
-
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -264,23 +281,16 @@ def configure_logging() -> None:
     )
 
 # ---------------------------------------------------------------------------
-
 def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(
-        CallbackQueryHandler(
-            raccoon_interpretation_callback,
-            pattern="^raccoon_interpretation$",
-        )
-    )
+    app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
 
     return app
 
 # ---------------------------------------------------------------------------
-
 def main() -> None:
     configure_logging()
 
@@ -293,6 +303,5 @@ def main() -> None:
     app.run_polling()
 
 # ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     main()
