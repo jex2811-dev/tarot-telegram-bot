@@ -28,7 +28,7 @@ LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # 🏠 Головне меню
 REPLY_KEYBOARD: Final[list[list[str]]] = [
-    ["🃏 Карта дня", "Категорії розкладів"],
+    ["🃏 Карта дня", "🔮 Розкласти карти"],
     ["Моя скринька 📦", "Як працює бот ❓"],
 ]
 
@@ -53,20 +53,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
 
+    greetings = [
+        f"Привіт, {user.first_name or 'друже'}! Єнот радий бачити тебе знову 🦝✨",
+        f"Магічне вітання, {user.first_name or 'друже'} 🌙✨ Готовий розкласти карти?",
+        f"Шурхіт карт і привіт від Єнота! 🦝 Готовий до магії?",
+    ]
+
     welcome_text = (
-        f"Привіт, {user.first_name or 'друже'}! 🦝✨\n\n"
-        "Я — <b>Містичний Єнот</b>, твій магічний провідник у світі карт Таро 🔮\n"
-        "Разом ми будемо відкривати підказки Всесвіту — про почуття, фінанси, кар’єру та щоденні знаки долі 🌙\n\n"
-        "🃏 <b>Карта дня</b> — твій щоденний супутник. Вона допоможе зрозуміти енергію дня, "
-        "налаштуватися на потрібну хвилю та побачити приховані можливості.\n\n"
-        "🔮 <b>Категорії розкладів</b> — обери, про що хочеш дізнатися:\n"
-        "   💞 Кохання — підкаже, що відбувається у серці;\n"
-        "   💼 Кар’єра — розповість, куди веде твій професійний шлях;\n"
-        "   💰 Гроші — відкриє фінансову перспективу й поради для достатку.\n\n"
-        "📦 <b>Моя скринька</b> — тут зберігається твоя магічна статистика: "
-        "скільки друзів ти запросив, скільки розкладів залишилось і які бонуси вже отримав ✨\n\n"
-        "❓ <b>Як працює бот</b> — коротка інструкція, якщо хочеш освіжити пам’ять про всі можливості.\n\n"
-        "Ну що, готовий до магії? Єнот уже потирає лапки і тасує карти... 🃏💫"
+        f"{random.choice(greetings)}\n\n"
+        "Я — <b>Містичний Єнот</b>, твій провідник у світі Таро 🔮\n"
+        "Разом ми відкриватимемо підказки Всесвіту — про кохання, фінанси й шлях долі 🌙\n\n"
+        "🃏 <b>Карта дня</b> — енергія твого сьогодні.\n"
+        "🔮 <b>Розкласти карти</b> — обери напрямок: любов, кар’єра чи гроші.\n"
+        "📦 <b>Моя скринька</b> — твоя магічна статистика і бонуси.\n\n"
+        "Єнот уже потирає лапки і тасує карти... 💫"
     )
 
     await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
@@ -78,10 +78,9 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     phrases = [
-        "Серце чи гаманець? А може, кар’єрна магія? Обирай свій шлях! 💞💰💼",
-        "Єнот розкладає карти... Куди зазирнемо сьогодні? 🔮🦝",
-        "Любов, гроші чи слава? Всесвіт чекає на твій вибір 💫",
-        "Твоя інтуїція не помиляється — просто обери напрямок 🌙",
+        "Єнот тасує карти... Куди зазирнемо сьогодні? 🔮🦝",
+        "Серце, гаманець чи кар’єра? Обери свій шлях 💞💰💼",
+        "Любов, гроші чи слава — що підкаже Всесвіт сьогодні? 💫",
         "Єнот підморгує: «Кохання чи кар’єра? Обери, поки карти гарячі!» 🔥",
     ]
 
@@ -92,7 +91,6 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_info = get_user_info(str(user.id))
-
     available_spreads = int(user_info.get("available_spreads", 0))
 
     if available_spreads <= 0:
@@ -104,12 +102,12 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    # Зменшуємо кількість карт
+    # 🔄 Зменшуємо кількість карт
     from gsheets_helper import find_user_row, get_col_index
     row_index, _ = find_user_row(str(user.id))
     users_sheet.update_cell(row_index, get_col_index("available_spreads"), available_spreads - 1)
 
-    # Логіка карт
+    # 🧩 Визначаємо категорію
     user_choice = update.message.text
     if user_choice == "💞 Любов":
         category = "love"
@@ -171,6 +169,14 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referral_code = user_data["referral_code"]
         referral_link = f"https://t.me/TaroEnotBot?start={referral_code}"
 
+        # 🏅 Рівень користувача
+        if referrals_count < 3:
+            rank = "🌱 Молодий шаман"
+        elif referrals_count < 6:
+            rank = "🔮 Магічний учень"
+        else:
+            rank = "🦝 Майстер Єнотової магії"
+
         moons = ["🌑🌑🌑", "🌕🌑🌑", "🌕🌕🌑", "🌕🌕🌕"]
         moon = moons[min(available_spreads, 3)]
 
@@ -178,6 +184,7 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📦 <b>Моя магічна скринька</b>\n\n"
             f"🔮 <b>Доступних розкладів:</b> {available_spreads} {moon}\n"
             f"💞 <b>Запрошено друзів:</b> {referrals_count}\n"
+            f"🏅 <b>Рівень:</b> {rank}\n\n"
             f"🔗 <b>Твій реферальний код:</b> <code>{referral_code}</code>\n\n"
             f"✨ <b>Посилання для друзів:</b>\n{referral_link}\n\n"
             "Єнот каже: «Ділися магією — і вона повернеться втричі!» 🦝💫"
@@ -198,8 +205,8 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------------------------------------------------------------------
 
-# 🛡️ Антидубль-захист у handle_message
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Головна логіка — з антидублюванням"""
     if context.user_data.get("is_processing", False):
         return
     context.user_data["is_processing"] = True
@@ -223,13 +230,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
                 "🃏 Карта дня — щоденний гід.\n"
-                "🔮 Категорії розкладів — любов, кар’єра, гроші.\n"
+                "🔮 Розкласти карти — любов, кар’єра, гроші.\n"
                 "📦 Моя скринька — бонуси та статистика.\n"
                 "🎁 Запрошуй друзів і отримуй карти!\n\n"
                 "<i>Єнот шепоче: навіть випадкові карти — це не випадковість 🌙</i>",
                 parse_mode="HTML",
             )
-        elif text == "Категорії розкладів":
+        elif text == "🔮 Розкласти карти":
             await show_categories(update, context)
         elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
             await handle_category_choice(update, context)
