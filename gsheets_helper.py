@@ -34,12 +34,22 @@ def generate_referral_code(user_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 🧙‍♂️ Додаємо нового користувача
+# 🔍 Знаходимо користувача за реферальним кодом
+def find_user_by_referral_code(ref_code: str):
+    records = users_sheet.get_all_records()
+    for i, row in enumerate(records, start=2):
+        if row.get("referral_code") == ref_code:
+            return i, row
+    return None, None
+
+
+# ---------------------------------------------------------------------------
+# 🧙‍♂️ Додаємо нового користувача (з реферальною системою +3 обом)
 def add_user(user_id, username, first_name, referral_code="NONE", referred_by=None):
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     today = str(date.today())
 
-    # Перевіряємо, чи користувач вже існує
+    # Перевіряємо, чи користувач вже є
     row_index, existing_user = find_user_row(user_id)
     if existing_user:
         update_daily_spreads(user_id)
@@ -48,16 +58,28 @@ def add_user(user_id, username, first_name, referral_code="NONE", referred_by=No
     # Генеруємо власний referral_code
     user_referral_code = generate_referral_code(user_id)
 
-    # Якщо користувач прийшов за реферальним кодом
+    # Базові значення
+    available_spreads = 3
+    referrals_count = 0
+
+    # 🧩 Якщо користувач прийшов за реферальним кодом
     if referred_by and referred_by != "NONE":
         ref_row, ref_user = find_user_by_referral_code(referred_by)
         if ref_row and ref_user:
             try:
+                # ✅ Додаємо бонус запросившому (+3)
                 current_spreads = int(ref_user.get("available_spreads", 3))
                 users_sheet.update_cell(ref_row, get_col_index("available_spreads"), current_spreads + 3)
 
+                # ✅ Оновлюємо кількість запрошених
                 current_refs = int(ref_user.get("referrals_count", 0))
                 users_sheet.update_cell(ref_row, get_col_index("referrals_count"), current_refs + 1)
+
+                # ✅ Новому користувачу теж +3 бонус
+                available_spreads += 3
+
+                print(f"🎁 {first_name} приєднався за кодом {referred_by}! Обидва отримали +3 карти!")
+
             except Exception as e:
                 print("⚠️ Помилка при оновленні даних реферала:", e)
 
@@ -68,23 +90,18 @@ def add_user(user_id, username, first_name, referral_code="NONE", referred_by=No
         first_name,
         user_referral_code,
         referred_by or "NONE",
-        3,  # available_spreads
-        0,  # referrals_count
+        available_spreads,  # 🔮 карти з бонусом (3 або 6)
+        referrals_count,
         today,  # last_reset
         now,  # created_at
     ]
     users_sheet.append_row(new_user)
     print(f"✅ Новий користувач доданий: {first_name} ({username})")
 
-
-# ---------------------------------------------------------------------------
-# 🔍 Знаходимо користувача за реферальним кодом
-def find_user_by_referral_code(ref_code: str):
-    records = users_sheet.get_all_records()
-    for i, row in enumerate(records, start=2):
-        if row.get("referral_code") == ref_code:
-            return i, row
-    return None, None
+    # -----------------------------------------------------------------------
+    # 🦝 Повідомлення у лог
+    if referred_by and 'ref_user' in locals() and ref_user:
+        print(f"💫 Бонус! {ref_user.get('first_name')} отримав +3 карти, {first_name} — теж +3.")
 
 
 # ---------------------------------------------------------------------------
