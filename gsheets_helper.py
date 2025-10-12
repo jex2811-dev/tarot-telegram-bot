@@ -18,7 +18,7 @@ users_sheet = client.open_by_key(SHEET_ID).worksheet("users")
 history_sheet = client.open_by_key(SHEET_ID).worksheet("history")
 
 # ---------------------------------------------------------------------------
-# 🧭 Допоміжна функція: знайти користувача
+# 🧭 Знайти користувача в таблиці
 def find_user_row(user_id: str):
     records = users_sheet.get_all_records()
     for i, row in enumerate(records, start=2):  # start=2 — пропускаємо заголовок
@@ -39,7 +39,7 @@ def add_user(user_id, username, first_name, referral_code="NONE", referred_by=No
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     today = str(date.today())
 
-    # Перевіряємо, чи користувач вже є
+    # Перевіряємо, чи користувач вже існує
     row_index, existing_user = find_user_row(user_id)
     if existing_user:
         update_daily_spreads(user_id)
@@ -113,11 +113,20 @@ def update_daily_spreads(user_id: str):
 # ---------------------------------------------------------------------------
 # 📦 Отримати інформацію користувача (для “Моя скринька 📦”)
 def get_user_info(user_id: str):
-    _, user = find_user_row(user_id)
+    row_index, user = find_user_row(user_id)
     if not user:
         return None
 
-    update_daily_spreads(user_id)
+    today = str(date.today())
+    last_reset = str(user.get("last_reset", ""))
+
+    # 🕓 Якщо новий день — оновлюємо карти
+    if today != last_reset:
+        users_sheet.update_cell(row_index, get_col_index("available_spreads"), 3)
+        users_sheet.update_cell(row_index, get_col_index("last_reset"), today)
+        user["available_spreads"] = 3
+        user["last_reset"] = today
+        print(f"🌅 Автоматично оновлено 3 карти для {user.get('first_name')}")
 
     return {
         "first_name": user.get("first_name"),
@@ -127,6 +136,8 @@ def get_user_info(user_id: str):
         "available_spreads": int(user.get("available_spreads", 0)),
         "referrals_count": int(user.get("referrals_count", 0)),
         "last_reset": user.get("last_reset"),
+        "row_index": row_index,
+        "available_spreads_col": get_col_index("available_spreads"),
     }
 
 
