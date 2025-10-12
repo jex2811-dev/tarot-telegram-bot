@@ -19,7 +19,7 @@ from telegram.ext import (
 )
 
 from daily_card import get_daily_card, raccoon_interpretation_callback
-from gsheets_helper import add_user
+from gsheets_helper import add_user, get_user_info
 from cards import cards  # ✅ Імпортуємо наш список карт
 
 # ---------------------------------------------------------------------------
@@ -35,19 +35,25 @@ REPLY_KEYBOARD: Final[list[list[str]]] = [
 # ---------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Register a new user and show the reply keyboard."""
+    """Реєстрація нового користувача + перевірка реферального посилання"""
     user = update.effective_user
+    args = context.args
+
+    # 🧩 Перевіряємо, чи користувач прийшов за реферальним кодом
+    referred_by = None
+    if args:
+        referred_by = args[0] if args[0].startswith("REF") else None
 
     add_user(
         user_id=str(user.id),
         username=user.username or "",
         first_name=user.first_name or "",
         referral_code="NONE",
+        referred_by=referred_by,
     )
 
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
 
-    # 🪄 Атмосферне привітання
     welcome_text = (
         f"Привіт, {user.first_name or 'друже'}! 🦝✨\n\n"
         "Я — <b>Містичний Єнот</b>, твій магічний провідник у світі карт Таро 🔮\n"
@@ -80,7 +86,6 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-    # 🎭 Випадкові фрази для атмосфери
     phrases = [
         "Серце чи гаманець? А може, кар’єрна магія? Обирай свій шлях! 💞💰💼",
         "Єнот розкладає карти... Куди зазирнемо сьогодні? 🔮🦝",
@@ -156,6 +161,38 @@ async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(f"🦝 {raccoon_comment}")
 
 # ---------------------------------------------------------------------------
+# 📦 Моя скринька
+async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_data = get_user_info(str(user.id))
+
+    if not user_data:
+        await update.message.reply_text("Єнот не може знайти твою скриньку... 🦝 Спробуй натиснути /start ще раз.")
+        return
+
+    available_spreads = user_data["available_spreads"]
+    referrals_count = user_data["referrals_count"]
+    referral_code = user_data["referral_code"]
+    referral_link = f"https://t.me/TaroEnotBot?start={referral_code}"
+
+    chest_text = (
+        f"📦 <b>Моя магічна скринька</b>\n\n"
+        f"🔮 <b>Доступних розкладів:</b> {available_spreads}\n"
+        f"💞 <b>Запрошено друзів:</b> {referrals_count}\n"
+        f"🔗 <b>Твій реферальний код:</b> <code>{referral_code}</code>\n\n"
+        f"✨ <b>Посилання для друзів:</b>\n{referral_link}\n\n"
+        "Єнот каже: «Ділися магією — і вона повернеться втричі!» 🦝💫"
+    )
+
+    keyboard = [
+        ["🔗 Скопіювати реферальне посилання"],
+        ["⬅️ Назад"]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(chest_text, parse_mode="HTML", reply_markup=reply_markup)
+
+# ---------------------------------------------------------------------------
 
 # 🔙 Назад у головне меню
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -170,6 +207,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if text == "🃏 Карта дня":
         await get_daily_card(update, context)
+
+    elif text == "Моя скринька 📦":
+        await show_my_chest(update, context)
+
+    elif text == "🔗 Скопіювати реферальне посилання":
+        user = update.effective_user
+        user_data = get_user_info(str(user.id))
+        referral_code = user_data["referral_code"]
+        referral_link = f"https://t.me/TaroEnotBot?start={referral_code}"
+
+        await update.message.reply_text(
+            f"🔗 Ось твоє посилання, щоб запросити друзів:\n{referral_link}\n\n"
+            "Єнот каже: «Кидай його своїм друзям і отримай 3 додаткові карти за кожного, хто приєднається!» 🦝💫"
+        )
 
     elif text == "Як працює бот ❓":
         how_it_works_text = (
@@ -191,7 +242,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Порада Єнота: <i>вір у себе, грай з долею легко, і пам’ятай — "
             "навіть дрібні збіги часто є знаками Всесвіту 💫</i>"
         )
-
         await update.message.reply_text(how_it_works_text, parse_mode="HTML")
 
     elif text == "Категорії розкладів":
