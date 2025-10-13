@@ -44,7 +44,6 @@ def run_health_server():
     def index():
         return "🦝 MysticEnotBot is alive and shuffling cards! ✨"
 
-    # Запуск у фоні
     thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True)
     thread.start()
     LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
@@ -226,24 +225,41 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 🧭 Головний обробник повідомлень
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+    user = update.effective_user
 
     if text == "🃏 Карта дня":
         await get_daily_card(update, context)
+
     elif text == "🔮 Розкласти карти":
         await show_categories(update, context)
+
     elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
         await handle_category_choice(update, context)
+
     elif text == "🦝 Коментар Єнота":
         await show_raccoon_comment(update, context)
+
     elif text == "💎 Бонуси та запрошення":
         await show_my_chest(update, context)
+
+    elif text == "📤 Поділитися запрошенням":
+        user_data = get_user_info(str(user.id))
+        referral_link = f"https://t.me/TaroEnotBot?start={user_data['referral_code']}"
+        await update.message.reply_text(
+            f"🔗 <b>Твоє реферальне посилання:</b>\n{referral_link}\n\n"
+            "Надішли його друзям у Telegram — і отримай <b>+3 розклади</b> за кожного 💫",
+            parse_mode="HTML"
+        )
+
     elif text == "Як працює бот ❓":
         await send_how_it_works(update, context)
+
     elif text == "⬅️ Назад":
         await update.message.reply_text(
             "Повертаємось у головне меню 🦝",
             reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True),
         )
+
     else:
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
