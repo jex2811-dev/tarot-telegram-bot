@@ -31,7 +31,7 @@ LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 # 🏠 Головне меню
 REPLY_KEYBOARD: Final[list[list[str]]] = [
     ["🃏 Карта дня", "🔮 Розкласти карти"],
-    ["Моя скринька 📦", "Як працює бот ❓"],
+    ["💎 Бонуси та запрошення", "Як працює бот ❓"],
 ]
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Разом ми відкриватимемо підказки Всесвіту — про кохання, фінанси й шлях долі 🌙\n\n"
         "🃏 <b>Карта дня</b> — енергія твого сьогодні.\n"
         "🔮 <b>Розкласти карти</b> — обери напрямок: любов, кар’єра чи гроші.\n"
-        "📦 <b>Моя скринька</b> — твоя магічна статистика і бонуси.\n\n"
+        "💎 <b>Бонуси та запрошення</b> — твоя магічна скринька і реферальні подарунки.\n\n"
         "Єнот уже потирає лапки і тасує карти... 💫"
     )
 
@@ -108,7 +108,7 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(
             "🃏 У тебе закінчились карти на сьогодні!\n\n"
             "Повертайся завтра 🌙 або запроси друга, щоб отримати +3 бонусні карти 💫\n\n"
-            "Натисни 📦 <b>Моя скринька</b>, щоб дізнатись більше.",
+            "Натисни 💎 <b>Бонуси та запрошення</b>, щоб дізнатись більше.",
             parse_mode="HTML",
         )
         return
@@ -156,13 +156,15 @@ async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(f"🦝 {raccoon}")
 
 # ---------------------------------------------------------------------------
-# 📦 Моя скринька
+# 💎 Магічна скринька (оновлено)
 async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         user_data = get_user_info(str(user.id))
         if not user_data:
-            await update.message.reply_text("Єнот не може знайти твою скриньку... 🦝 Спробуй натиснути /start ще раз.")
+            await update.message.reply_text(
+                "Єнот не може знайти твою скриньку... 🦝 Спробуй натиснути /start ще раз."
+            )
             return
 
         available_spreads = user_data["available_spreads"]
@@ -177,18 +179,34 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             rank = "🦝 Майстер Єнотової магії"
 
+        moons = ["🌑🌑🌑", "🌕🌑🌑", "🌕🌕🌑", "🌕🌕🌕"]
+        moon = moons[min(available_spreads, 3)]
+
         chest_text = (
-            f"📦 <b>Моя магічна скринька</b>\n\n"
-            f"🔮 Доступних розкладів: {available_spreads}\n"
-            f"💞 Запрошено друзів: {referrals_count}\n"
-            f"🏅 Рівень: {rank}\n\n"
-            f"🔗 <b>Твоє посилання:</b>\nhttps://t.me/TaroEnotBot?start={referral_code}\n\n"
-            "Єнот каже: «Ділися магією — і вона повернеться втричі!» 🦝💫"
+            f"💎 <b>Твоя магічна скринька</b>\n\n"
+            f"🔮 <b>Доступних розкладів:</b> {available_spreads} {moon}\n"
+            f"💞 <b>Запрошено друзів:</b> {referrals_count}\n"
+            f"🏅 <b>Рівень:</b> {rank}\n\n"
+            "───────────────\n"
+            "🪄 <b>Хочеш більше карт?</b>\n"
+            "Запроси друзів і отримай +3 розклади за кожного 💫\n\n"
+            "🔗 <b>Твоє реферальне посилання:</b>\n"
+            f"{referral_link}\n\n"
+            "Поділися ним у Telegram або сторіз —\n"
+            "і нехай Єнот віддячить магією 🦝✨"
         )
 
-        await update.message.reply_text(chest_text, parse_mode="HTML")
+        keyboard = [["📤 Поділитися запрошенням"], ["⬅️ Назад"]]
+        await update.message.reply_text(
+            chest_text,
+            parse_mode="HTML",
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        )
+
     except Exception as e:
-        await update.message.reply_text("⚠️ Єнот заплутався у магії Google Sheets... Спробуй ще раз 🦝✨")
+        await update.message.reply_text(
+            "⚠️ Єнот заплутався у магії Google Sheets... Спробуй ще раз 🦝✨"
+        )
         print("❌ Помилка в show_my_chest:", e)
 
 # ---------------------------------------------------------------------------
@@ -198,7 +216,7 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
         "🃏 <b>Карта дня</b> — щоденна підказка Всесвіту.\n"
         "🔮 <b>Розкласти карти</b> — любов, кар’єра, гроші.\n"
-        "📦 <b>Моя скринька</b> — твої бонуси та рівень мага.\n"
+        "💎 <b>Бонуси та запрошення</b> — твої подарунки та рівень мага.\n"
         "🎁 <b>Запрошуй друзів</b> — отримуй карти за рефералів.\n\n"
         "<i>Єнот шепоче: навіть випадкові карти — не випадковість 🌙</i>"
     )
@@ -217,7 +235,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_category_choice(update, context)
     elif text == "🦝 Коментар Єнота":
         await show_raccoon_comment(update, context)
-    elif text == "Моя скринька 📦":
+    elif text == "💎 Бонуси та запрошення":
         await show_my_chest(update, context)
     elif text == "Як працює бот ❓":
         await send_how_it_works(update, context)
