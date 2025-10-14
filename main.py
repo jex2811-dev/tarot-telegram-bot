@@ -7,6 +7,7 @@ import os
 import random
 import time
 import threading
+from datetime import datetime
 from typing import Final
 from flask import Flask
 
@@ -24,6 +25,7 @@ from telegram.ext import (
 from daily_card import get_daily_card, raccoon_interpretation_callback
 from gsheets_helper import add_user, get_user_info, users_sheet
 from cards import cards
+from gsheets_helper import find_user_row, get_col_index
 
 # ---------------------------------------------------------------------------
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
@@ -49,6 +51,31 @@ def run_health_server():
     LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
 
 # ---------------------------------------------------------------------------
+# 🎁 Щоденне нарахування бонусу (+ повідомлення)
+def give_daily_bonus_if_needed(user_id: str) -> bool:
+    """Автоматично додає +3 карти раз на день. Повертає True, якщо бонус був нарахований."""
+    try:
+        user_info = get_user_info(user_id)
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Якщо бонус вже був сьогодні — нічого не робимо
+        if str(user_info.get("last_daily_bonus", "")) == today:
+            return False
+
+        current_spreads = int(user_info.get("available_spreads", 0))
+        new_spreads = current_spreads + 3
+
+        row_index, _ = find_user_row(user_id)
+        users_sheet.update_cell(row_index, get_col_index("available_spreads"), new_spreads)
+        users_sheet.update_cell(row_index, get_col_index("last_daily_bonus"), today)
+
+        LOGGER.info(f"🎁 {user_id}: щоденний бонус +3 карт (тепер {new_spreads})")
+        return True
+    except Exception as e:
+        LOGGER.error(f"❌ Помилка в give_daily_bonus_if_needed: {e}")
+        return False
+
+# ---------------------------------------------------------------------------
 # 🪄 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -62,6 +89,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referral_code="NONE",
         referred_by=referred_by,
     )
+
+    # ✅ Щоденний бонус
+    bonus_given = give_daily_bonus_if_needed(str(user.id))
+    if bonus_given:
+        await update.message.reply_text(
+            "🎁 Єнот подарував тобі <b>3 нові карти</b> на сьогодні! 🃏✨",
+            parse_mode="HTML"
+        )
 
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
 
@@ -112,7 +147,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    from gsheets_helper import find_user_row, get_col_index
     row_index, _ = find_user_row(str(user.id))
     users_sheet.update_cell(row_index, get_col_index("available_spreads"), available_spreads - 1)
 
@@ -155,15 +189,13 @@ async def show_raccoon_comment(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(f"🦝 {raccoon}")
 
 # ---------------------------------------------------------------------------
-# 💎 Магічна скринька (оновлено)
+# 💎 Магічна скринька
 async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         user_data = get_user_info(str(user.id))
         if not user_data:
-            await update.message.reply_text(
-                "Єнот не може знайти твою скриньку... 🦝 Спробуй натиснути /start ще раз."
-            )
+            await update.message.reply_text("Єнот не може знайти твою скриньку... 🦝 Спробуй /start ще раз.")
             return
 
         available_spreads = user_data["available_spreads"]
@@ -196,16 +228,11 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         keyboard = [["📤 Поділитися запрошенням"], ["⬅️ Назад"]]
-        await update.message.reply_text(
-            chest_text,
-            parse_mode="HTML",
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
-        )
+        await update.message.reply_text(chest_text, parse_mode="HTML",
+                                        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
     except Exception as e:
-        await update.message.reply_text(
-            "⚠️ Єнот заплутався у магії Google Sheets... Спробуй ще раз 🦝✨"
-        )
+        await update.message.reply_text("⚠️ Єнот заплутався у магії Google Sheets... 🦝✨")
         print("❌ Помилка в show_my_chest:", e)
 
 # ---------------------------------------------------------------------------
@@ -216,7 +243,7 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🃏 <b>Карта дня</b> — щоденна підказка Всесвіту.\n"
         "🔮 <b>Розкласти карти</b> — любов, кар’єра, гроші.\n"
         "💎 <b>Бонуси та запрошення</b> — твої подарунки та рівень мага.\n"
-        "🎁 <b>Запрошуй друзів</b> — отримуй карти за рефералів.\n\n"
+        "🎁 <b>Щодня</b> — отримуй 3 нові карти безкоштовно 🌙\n\n"
         "<i>Єнот шепоче: навіть випадкові карти — не випадковість 🌙</i>"
     )
     await update.message.reply_text(text, parse_mode="HTML")
@@ -229,19 +256,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "🃏 Карта дня":
         await get_daily_card(update, context)
-
     elif text == "🔮 Розкласти карти":
         await show_categories(update, context)
-
     elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
         await handle_category_choice(update, context)
-
     elif text == "🦝 Коментар Єнота":
         await show_raccoon_comment(update, context)
-
     elif text == "💎 Бонуси та запрошення":
         await show_my_chest(update, context)
-
     elif text == "📤 Поділитися запрошенням":
         user_data = get_user_info(str(user.id))
         referral_link = f"https://t.me/TaroEnotBot?start={user_data['referral_code']}"
@@ -250,16 +272,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Надішли його друзям у Telegram — і отримай <b>+3 розклади</b> за кожного 💫",
             parse_mode="HTML"
         )
-
     elif text == "Як працює бот ❓":
         await send_how_it_works(update, context)
-
     elif text == "⬅️ Назад":
         await update.message.reply_text(
             "Повертаємось у головне меню 🦝",
             reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True),
         )
-
     else:
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
