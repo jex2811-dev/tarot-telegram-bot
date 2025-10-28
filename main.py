@@ -271,6 +271,19 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
+# 💳 Обробка успішної оплати (через Telegram Stars)
+async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # 🛑 Якщо це тестовий режим і користувач не розробник — блокуємо оплату
+    if BETA_MODE and user_id != DEVELOPER_ID:
+        await update.message.reply_text("⚠️ Оплата тимчасово недоступна. Єнот ще тестує магію 🦝✨")
+        return
+
+    # ✅ Якщо ти — розробник
+    await update.message.reply_text("✅ Оплата пройшла успішно! Тестовий доступ активовано 💫")
+
+# ---------------------------------------------------------------------------
 # 🧭 Головний обробник повідомлень
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -315,6 +328,7 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_payment))
     return app
 
 # ---------------------------------------------------------------------------
