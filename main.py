@@ -23,14 +23,16 @@ from telegram.ext import (
 
 # ✅ Імпорти
 from daily_card import get_daily_card, raccoon_interpretation_callback
-from gsheets_helper import add_user, get_user_info, users_sheet
+from gsheets_helper import add_user, get_user_info, users_sheet, find_user_row, get_col_index
 from cards import cards
-from gsheets_helper import find_user_row, get_col_index
+
+# 🔧 Імпорт конфігурації для Dev-режиму
+from config import DEVELOPER_ID, BETA_MODE
 
 # ---------------------------------------------------------------------------
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
-# 🏠 Головне меню
+# 🏠 Головне меню для звичайних користувачів
 REPLY_KEYBOARD: Final[list[list[str]]] = [
     ["🃏 Карта дня", "🔮 Розкласти карти"],
     ["💎 Бонуси та запрошення", "Як працює бот ❓"],
@@ -51,14 +53,12 @@ def run_health_server():
     LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
 
 # ---------------------------------------------------------------------------
-# 🎁 Щоденне нарахування бонусу (+ повідомлення)
+# 🎁 Щоденне нарахування бонусу
 def give_daily_bonus_if_needed(user_id: str) -> bool:
     """Автоматично додає +3 карти раз на день. Повертає True, якщо бонус був нарахований."""
     try:
         user_info = get_user_info(user_id)
         today = datetime.now().strftime("%Y-%m-%d")
-
-        # Якщо бонус вже був сьогодні — нічого не робимо
         if str(user_info.get("last_daily_bonus", "")) == today:
             return False
 
@@ -74,6 +74,11 @@ def give_daily_bonus_if_needed(user_id: str) -> bool:
     except Exception as e:
         LOGGER.error(f"❌ Помилка в give_daily_bonus_if_needed: {e}")
         return False
+
+# ---------------------------------------------------------------------------
+# 🧠 Перевірка, чи користувач — розробник
+def is_developer(user_id: int) -> bool:
+    return BETA_MODE and user_id == DEVELOPER_ID
 
 # ---------------------------------------------------------------------------
 # 🪄 Команда /start
@@ -98,25 +103,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
+    # 💫 Меню залежно від користувача
+    if is_developer(user.id):
+        # --- Тестове меню (видно лише тобі) ---
+        markup = ReplyKeyboardMarkup([
+            ["🃏 Карта дня", "🔮 Розкласти карти"],
+            ["💎 Бонуси та запрошення", "Як працює бот ❓"],
+            ["🤖 AI-розклади (BETA)", "🖐 AI-Хіромантія (BETA)"],
+            ["🌌 Астрологічний прогноз (BETA)", "🔢 Нумерологічний портрет (BETA)"]
+        ], resize_keyboard=True)
 
-    greetings = [
-        f"Привіт, {user.first_name or 'друже'}! Єнот радий бачити тебе знову 🦝✨",
-        f"Магічне вітання, {user.first_name or 'друже'} 🌙✨ Готовий розкласти карти?",
-        f"Шурхіт карт і привіт від Єнота! 🦝 Готовий до магії?",
-    ]
+        await update.message.reply_text(
+            "🧪 Тестовий режим активний.\n"
+            "Вітаю, Єноте-розробнику! Ти бачиш BETA-функції 🦝✨",
+            reply_markup=markup
+        )
+    else:
+        # --- Звичайне меню ---
+        markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
 
-    welcome_text = (
-        f"{random.choice(greetings)}\n\n"
-        "Я — <b>Містичний Єнот</b>, твій провідник у світі Таро 🔮\n"
-        "Разом ми відкриватимемо підказки Всесвіту — про кохання, фінанси й шлях долі 🌙\n\n"
-        "🃏 <b>Карта дня</b> — енергія твого сьогодні.\n"
-        "🔮 <b>Розкласти карти</b> — обери напрямок: любов, кар’єра чи гроші.\n"
-        "💎 <b>Бонуси та запрошення</b> — твоя магічна скринька і реферальні подарунки.\n\n"
-        "Єнот уже потирає лапки і тасує карти... 💫"
-    )
+        greetings = [
+            f"Привіт, {user.first_name or 'друже'}! Єнот радий бачити тебе знову 🦝✨",
+            f"Магічне вітання, {user.first_name or 'друже'} 🌙✨ Готовий розкласти карти?",
+            f"Шурхіт карт і привіт від Єнота! 🦝 Готовий до магії?",
+        ]
 
-    await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
+        welcome_text = (
+            f"{random.choice(greetings)}\n\n"
+            "Я — <b>Містичний Єнот</b>, твій провідник у світі Таро 🔮\n"
+            "Разом ми відкриватимемо підказки Всесвіту — про кохання, фінанси й шлях долі 🌙\n\n"
+            "🃏 <b>Карта дня</b> — енергія твого сьогодні.\n"
+            "🔮 <b>Розкласти карти</b> — обери напрямок: любов, кар’єра чи гроші.\n"
+            "💎 <b>Бонуси та запрошення</b> — твоя магічна скринька і реферальні подарунки.\n\n"
+            "Єнот уже потирає лапки і тасує карти... 💫"
+        )
+
+        await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
 # 🔮 Показ категорій
@@ -253,6 +275,11 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user = update.effective_user
+
+    # 🧪 Тимчасово приховуємо beta-функції для інших користувачів
+    if BETA_MODE and user.id != DEVELOPER_ID and text.endswith("(BETA)"):
+        await update.message.reply_text("🧪 Ця функція ще тестується Єнотом 🦝✨")
+        return
 
     if text == "🃏 Карта дня":
         await get_daily_card(update, context)
