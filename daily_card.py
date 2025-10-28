@@ -31,10 +31,10 @@ async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         description = "Ця карта ще не має опису для карти дня 🌙"
         raccoon = "Єнот ще не встиг написати тлумачення... але каже, що все буде добре 🦝✨"
 
-    # 🔹 Додаємо запис в історію
+    # 🔹 Додаємо запис в історію (Google Sheets)
     add_history(user_id=user_id, spread_type="Карта дня", cards=title)
 
-    # 🔹 Кнопка "Що думає Єнот 🦝"
+    # 🔹 Кнопка «Що думає Єнот 🦝»
     keyboard = [[InlineKeyboardButton("Що думає Єнот 🦝", callback_data="raccoon_interpretation")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -46,14 +46,14 @@ async def get_daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-    # 🔹 Зберігаємо карту і тлумачення
+    # 🔹 Зберігаємо карту й тлумачення в контекст
     context.user_data["last_card"] = {
         "card": card,
         "raccoon": raccoon
     }
 
 # ---------------------------------------------------------------------------
-# 🦝 Тлумачення від Єнота
+# 🦝 Тлумачення від Єнота (через callback-кнопку)
 async def raccoon_interpretation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -65,6 +65,7 @@ async def raccoon_interpretation_callback(update: Update, context: ContextTypes.
 
     raccoon_text = last_card_data.get("raccoon", "Єнот задумався... спробуй ще раз 🦝💫")
 
+    # 🔹 Відповідь окремим повідомленням (щоб не затирати карту)
     await query.message.reply_text(
         f"🦝 <b>Що думає Єнот:</b>\n\n{raccoon_text}",
         parse_mode="HTML"
