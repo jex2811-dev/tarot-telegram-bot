@@ -83,6 +83,18 @@ def is_developer(user_id: int) -> bool:
     return BETA_MODE and user_id == DEVELOPER_ID
 
 # ---------------------------------------------------------------------------
+# 🏠 Повернення у головне меню (коротке повідомлення)
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
+    # відповідаємо і на message, і на callback query, якщо колись знадобиться
+    if update.message:
+        await update.message.reply_text("🔮 Ви повернулися до головного меню.", reply_markup=markup)
+    elif update.callback_query:
+        q = update.callback_query
+        await q.answer()
+        await q.message.reply_text("🔮 Ви повернулися до головного меню.", reply_markup=markup)
+
+# ---------------------------------------------------------------------------
 # 🪄 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -99,7 +111,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ✅ Щоденний бонус
     bonus_given = give_daily_bonus_if_needed(str(user.id))
-    if bonus_given:
+    if bonus_given and update.message:
         await update.message.reply_text(
             "🎁 Єнот подарував тобі <b>3 нові карти</b> на сьогодні! 🃏✨",
             parse_mode="HTML"
@@ -122,7 +134,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Єнот уже потирає лапки і тасує карти... 💫"
     )
 
-    await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
+    if update.message:
+        await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
 # 🔮 Показ категорій
@@ -176,6 +189,7 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         description = "Ця карта ще не має опису для цієї категорії."
         raccoon = "Єнот мовчить, бо ще пише маніфест 🦝🖋️"
 
+    # збережемо дані для кнопки "Коментар Єнота"
     context.user_data["last_card"] = (card, category, raccoon)
 
     await update.message.reply_photo(
@@ -184,6 +198,18 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode="HTML",
         reply_markup=ReplyKeyboardMarkup([["🦝 Коментар Єнота"], ["⬅️ Назад"]], resize_keyboard=True),
     )
+
+# ---------------------------------------------------------------------------
+# 🦝 Текстовий хендлер для кнопки "Коментар Єнота"
+async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = context.user_data.get("last_card")
+    if not data:
+        await update.message.reply_text("Спершу обери розклад і карту, а потім натисни «🦝 Коментар Єнота».")
+        return
+
+    card, category, raccoon_text = data
+    # Можеш розширити логіку: підставляти інший текст залежно від карти/категорії
+    await update.message.reply_text(f"🦝 Коментар Єнота:\n{raccoon_text}")
 
 # ---------------------------------------------------------------------------
 # 💫 Меню платних функцій
@@ -235,7 +261,7 @@ async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 # ---------------------------------------------------------------------------
-# 💳 Обробка успішної оплати (оновлено)
+# 💳 Обробка успішної оплати
 async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     payment = update.message.successful_payment
@@ -341,21 +367,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_categories(update, context)
     elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
         await handle_category_choice(update, context)
+    elif text == "🦝 Коментар Єнота":
+        await handle_raccoon_comment_text(update, context)
     elif text == "💎 Бонуси та запрошення":
         await show_my_chest(update, context)
     elif text == "Як працює бот ❓":
         await send_how_it_works(update, context)
     elif text == "⬅️ Назад":
-        await start(update, context)
+        # 🔁 коротке повернення в головне меню (без великого привітання /start)
+        await back_to_main_menu(update, context)
     else:
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
 # ---------------------------------------------------------------------------
 def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
+
+    # команди
     app.add_handler(CommandHandler("start", start))
+
+    # повідомлення/кнопки (reply keyboard)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # інлайн-кнопки для єнотового коментаря з daily_card (залишаємо)
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
+
+    # успішна оплата
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_payment))
     return app
 
