@@ -221,7 +221,7 @@ async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYP
 
     product, amount = services[text]
     title = text.split("(")[0].strip()
-    prices = [LabeledPrice(label=title, amount=amount * 100)]
+    prices = [LabeledPrice(label=title, amount=amount)]
 
     await context.bot.send_invoice(
         chat_id=chat_id,
