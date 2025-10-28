@@ -25,6 +25,7 @@ from telegram.ext import (
 from daily_card import get_daily_card, raccoon_interpretation_callback
 from gsheets_helper import add_user, get_user_info, users_sheet, find_user_row, get_col_index
 from cards import cards
+from ai_free import generate_ai_tarot  # 🆕 новий імпорт
 
 # 🔧 Імпорт конфігурації для Dev-режиму
 from config import DEVELOPER_ID, BETA_MODE
@@ -104,7 +105,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 💫 Меню залежно від користувача
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
     greetings = [
         f"Привіт, {user.first_name or 'друже'}! Єнот радий бачити тебе знову 🦝✨",
@@ -186,7 +186,7 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 # ---------------------------------------------------------------------------
-# 💫 Меню платних функцій (через Telegram Stars)
+# 💫 Меню платних функцій
 async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_developer(user.id):
@@ -204,7 +204,7 @@ async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("🪄 Обери магічну послугу 🌙", reply_markup=markup)
 
 # ---------------------------------------------------------------------------
-# 💰 Надсилання рахунку (через Telegram Stars)
+# 💰 Надсилання рахунку
 async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text
@@ -235,7 +235,7 @@ async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 # ---------------------------------------------------------------------------
-# 💳 Обробка успішної оплати
+# 💳 Обробка успішної оплати (оновлено)
 async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     payment = update.message.successful_payment
@@ -245,16 +245,21 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("⚠️ Оплата тимчасово недоступна. Єнот тестує магію 🦝✨")
         return
 
-    await update.message.reply_text(f"✅ Оплата успішна! Отримано: {product}")
+    await update.message.reply_text("✅ Оплата успішна! Єнот уже готує твою магію... 🦝✨")
+
+    user_name = update.effective_user.first_name or "Друже"
 
     if product == "ai_tarot":
-        await update.message.reply_text("🔮 Єнот готує твій індивідуальний розклад...")
+        text = generate_ai_tarot(user_name)
+        await update.message.reply_text(text)
     elif product == "chiromancy":
         await update.message.reply_text("🖐 Єнот читає твої лінії долі...")
     elif product == "astrology":
         await update.message.reply_text("🌌 Єнот дивиться на твої зірки...")
     elif product == "numerology":
         await update.message.reply_text("🔢 Єнот обчислює твоє космічне число долі...")
+    else:
+        await update.message.reply_text("🤔 Єнот ще не знає цієї магії...")
 
 # ---------------------------------------------------------------------------
 # 💎 Магічна скринька
