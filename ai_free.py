@@ -5,19 +5,13 @@ import requests
 
 LOGGER = logging.getLogger(__name__)
 
-# 🔑 важливо: в Render ключ має називатися саме HF_TOKEN
 HF_TOKEN = os.getenv("HF_TOKEN")
-
-# ✅ новий маршрутизатор від Hugging Face (старий api-inference.* дає 404)
 BASE_URL = "https://router.huggingface.co/hf-inference/models"
 
-# 💡 пробуємо кілька моделей по черзі (від найкращих до гарантовано публічних)
+# Використовуємо лише ті моделі, що реально доступні у Inference Providers
+# (у Mistral v0.3 та v0.1 немає провайдерів -> 404; gpt2 теж часто 404)
 CANDIDATE_MODELS = [
-    "mistralai/Mistral-7B-Instruct-v0.3",
     "mistralai/Mistral-7B-Instruct-v0.2",
-    "mistralai/Mistral-7B-Instruct-v0.1",
-    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",   # публічна легка
-    "gpt2",                                  # останній рятівник
 ]
 
 HEADERS = {
@@ -27,10 +21,6 @@ HEADERS = {
 }
 
 def _hf_generate(prompt: str, max_new_tokens: int = 220, temperature: float = 0.8) -> str:
-    """
-    Виконує запит до HF Inference Providers API (router.huggingface.co) з каскадом моделей.
-    Повертає згенерований текст або підіймає RuntimeError з чіткою причиною.
-    """
     if not HF_TOKEN:
         raise RuntimeError("HF_TOKEN is not set in environment")
 
@@ -41,47 +31,25 @@ def _hf_generate(prompt: str, max_new_tokens: int = 220, temperature: float = 0.
             "temperature": temperature,
             "return_full_text": False,
         },
-        "options": {"wait_for_model": True},  # чекаємо, поки прогріється
+        "options": {"wait_for_model": True},
     }
 
     last_err = None
     for model_id in CANDIDATE_MODELS:
         url = f"{BASE_URL}/{model_id}"
         try:
-            r = requests.post(url, headers=HEADERS, json=payload, timeout=70)
-
-            # 👇 дружні повідомлення для типових ситуацій
-            if r.status_code == 401:
-                detail = r.text[:300]
-                last_err = f"401 Unauthorized — перевір HF_TOKEN. {detail}"
-                LOGGER.error(f"HF 401 for {model_id}: {detail}")
-                break  # без валідного токена інші моделі теж не підуть
-
-            if r.status_code == 403:
-                detail = r.text[:300]
-                last_err = (f"403 Forbidden / Gated model для {model_id}. "
-                            "Відкрий сторінку моделі на Hugging Face і натисни "
-                            "“Access repository” (прийняти умови). "
-                            f"Деталі: {detail}")
-                LOGGER.error(f"HF 403 for {model_id}: {detail}")
-                # Пробуємо наступну модель, можливо вона не gated
-                continue
-
+            r = requests.post(url, headers=HEADERS, json=payload, timeout=90)
             if r.status_code == 404:
-                detail = r.text[:200]
-                last_err = f"404 Not Found для {model_id}. {detail}"
-                LOGGER.warning(f"HF 404 for {model_id}: {detail}")
+                LOGGER.warning(f"HF 404 for model {model_id} — trying next")
+                last_err = f"404 Not Found for {model_id}"
                 continue
-
             if r.status_code in (429, 503):
-                detail = r.text[:200]
-                LOGGER.warning(f"HF {r.status_code} for {model_id}: {detail}")
-                return ("⚠️ Сервіс Hugging Face зараз перевантажений. "
-                        "Спробуй ще раз за хвилинку 🌙")
+                LOGGER.warning(f"HF {r.status_code} for {model_id}: {r.text[:200]}")
+                return "⚠️ Сервіс Hugging Face зараз перевантажений. Спробуй ще раз за хвилинку 🌙"
 
             r.raise_for_status()
-
             data = r.json()
+
             text = None
             if isinstance(data, list) and data and isinstance(data[0], dict):
                 text = data[0].get("generated_text") or data[0].get("summary_text")
@@ -89,15 +57,14 @@ def _hf_generate(prompt: str, max_new_tokens: int = 220, temperature: float = 0.
                 text = data.get("generated_text") or data.get("summary_text")
 
             if not text:
-                # якщо формат неочікуваний — повернемо сирий json
                 text = str(data)
 
             return text.strip()
 
         except Exception as e:
-            last_err = f"{type(e).__name__}: {e}"
+            last_err = e
             LOGGER.exception(f"HF error with {model_id}: {e}")
-            # пробуємо наступну модель
+            continue
 
     raise RuntimeError(f"All HF models failed. Last error: {last_err}")
 
@@ -113,7 +80,7 @@ def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -
     try:
         return _hf_generate(prompt, max_new_tokens=260, temperature=0.85)
     except Exception as e:
-        return f"⚠️ Єнот не зміг зв’язатися з Всесвітом Hugging Face: {e}"
+        return f"⚠️ Єнот не зміг зв’язатися з Hugging Face: {e}"
 
 def generate_ai_astrology(name: str, birthdate: str) -> str:
     prompt = (
@@ -128,7 +95,6 @@ def generate_ai_astrology(name: str, birthdate: str) -> str:
         return f"⚠️ Єнот не дістав зірки для астрології: {e}"
 
 def generate_ai_numerology(birthdate: str) -> str:
-    # простий розрахунок "числа долі"
     digits = [int(c) for c in birthdate if c.isdigit()]
     n = sum(digits)
     while n > 9:
