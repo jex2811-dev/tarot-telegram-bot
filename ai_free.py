@@ -1,82 +1,124 @@
+# ai_free.py
 import os
+import logging
 import requests
 
-# 🔑 Беремо токен із Render Environment Variables
-HF_TOKEN = os.getenv("HF_TOKEN")
+LOGGER = logging.getLogger(__name__)
 
-def get_ai_reading(prompt: str, model: str = "mistralai/Mistral-7B-Instruct-v0.1") -> str:
-    """Отримуємо текстову відповідь від Hugging Face API."""
-    try:
-        headers = {
-            "Authorization": f"Bearer {HF_TOKEN}",
-            "Content-Type": "application/json",
+HF_TOKEN = os.getenv("HF_TOKEN")  # переконайся, що саме так називається змінна в Render
+BASE_URL = "https://api-inference.huggingface.co/models"
+
+# Порядок спроб: найсвіжіші моделі вище
+CANDIDATE_MODELS = [
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+    "mistralai/Mistral-7B-Instruct-v0.1",
+    "gpt2",
+]
+
+HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}" if HF_TOKEN else "",
+    "Content-Type": "application/json",
+}
+
+def _hf_generate(prompt: str, max_new_tokens: int = 220, temperature: float = 0.8) -> str:
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN is not set in environment")
+
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": max_new_tokens,
+            "temperature": temperature,
+            "return_full_text": False,
+        },
+        "options": {
+            "wait_for_model": True  # безкоштовний ендпоінт — нехай дочекається завантаження моделі
         }
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 300,
-                "temperature": 0.8,
-                "top_p": 0.95,
-            },
-        }
+    }
 
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{model}",
-            headers=headers,
-            json=payload,
-            timeout=60,
-        )
-        response.raise_for_status()
-        data = response.json()
+    last_err = None
+    for mid in CANDIDATE_MODELS:
+        url = f"{BASE_URL}/{mid}"
+        try:
+            r = requests.post(url, headers=HEADERS, json=payload, timeout=60)
+            if r.status_code == 404:
+                LOGGER.warning(f"HF 404 for model {mid} — пробую наступну")
+                continue
+            r.raise_for_status()
+            data = r.json()
 
-        if isinstance(data, list) and "generated_text" in data[0]:
-            return data[0]["generated_text"].strip()
-        elif isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"].strip()
-        else:
-            return "🦝 Єнот задумався... AI зараз у тумані. Спробуй пізніше ✨"
+            # Відповіді бувають різні: [ {generated_text: "..."} ] або {"generated_text": "..."} або інші
+            text = None
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                text = data[0].get("generated_text") or data[0].get("summary_text")
+            elif isinstance(data, dict):
+                text = data.get("generated_text") or data.get("summary_text")
 
-    except Exception as e:
-        return f"⚠️ Єнот не зміг зв’язатись із Всесвітом Hugging Face: {e}"
+            if not text:
+                # як fallback — повернемо сирі дані
+                text = str(data)
 
-# 💫 Індивідуальний AI-розклад
-def generate_ai_tarot(name: str, age: int = None, topic: str = None) -> str:
+            return text.strip()
+
+        except Exception as e:
+            last_err = e
+            LOGGER.exception(f"HF error with {mid}: {e}")
+            continue
+
+    raise RuntimeError(f"All HF models failed. Last error: {last_err}")
+
+# ------------------------- ПУБЛІЧНІ ФУНКЦІЇ -------------------------
+
+def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -> str:
     prompt = (
-        f"Ти — містичний єнот-таролог 🦝✨. "
-        f"Створи персональний розклад для {name}"
-        f"{', ' + str(age) + ' років' if age else ''}"
-        f"{', тема: ' + topic if topic else ''}. "
-        f"7–10 речень у теплій і магічній манері, з позитивним фіналом."
+        "Ти — містичний єнот-таролог 🦝✨. Пиши українською. "
+        f"Створи персональний розклад для {name}, {age} років, тема: {topic}. "
+        "Дай 7–10 речень: 1) загальна енергія; 2) поради; 3) попередження; 4) маленький ритуал. "
+        "Тон: теплий, підтримуючий, магічний, без токсичного позитиву."
     )
-    return get_ai_reading(prompt)
+    try:
+        return _hf_generate(prompt, max_new_tokens=260, temperature=0.85)
+    except Exception as e:
+        return f"⚠️ Єнот не зміг зв’язатися з Всесвітом Hugging Face: {e}"
 
-# 🌌 AI-Астрологічний прогноз
 def generate_ai_astrology(name: str, birthdate: str) -> str:
     prompt = (
-        f"Ти — єнот-астролог 🦝✨. "
-        f"На основі дати народження {birthdate} створи прогноз (10–12 речень) "
-        f"про характер, кохання, кар’єру й енергію для {name}."
+        "Ти — єнот-астролог 🦝✨. Пиши українською. "
+        f"Користувач: {name}, дата народження {birthdate}. "
+        "Зроби прогноз на 10–12 речень про характер, кохання, кар’єру, фінанси та енергію місяця. "
+        "Дай 3 конкретні поради та 1 обережність."
     )
-    return get_ai_reading(prompt)
+    try:
+        return _hf_generate(prompt, max_new_tokens=280, temperature=0.8)
+    except Exception as e:
+        return f"⚠️ Єнот не дістав зірки для астрології: {e}"
 
-# 🔢 AI-Нумерологічний портрет
 def generate_ai_numerology(birthdate: str) -> str:
-    digits = [int(d) for d in birthdate if d.isdigit()]
-    destiny = sum(digits)
-    while destiny > 9:
-        destiny = sum(int(d) for d in str(destiny))
-    prompt = (
-        f"Ти — єнот-нумеролог 🦝✨. "
-        f"Число долі користувача — {destiny}. "
-        "Опиши його енергію, характер і життєву місію у 7–9 реченнях."
-    )
-    return get_ai_reading(prompt, model="gpt2")
+    # просте число долі
+    digits = [int(c) for c in birthdate if c.isdigit()]
+    n = sum(digits)
+    while n > 9:
+        n = sum(int(c) for c in str(n))
 
-# 🖐 AI-Хіромантія (із фото)
-def generate_ai_chiromancy(photo_caption: str) -> str:
     prompt = (
-        f"Ти — містичний єнот-хіромант 🦝✨. Фото показує: {photo_caption}. "
-        "Опиши долоню детально (8–12 речень): лінії життя, серця, розуму, "
-        "характер і майбутнє, у магічному та теплому стилі."
+        "Ти — єнот-нумеролог 🦝✨. Пиши українською. "
+        f"Число долі користувача — {n}. "
+        "Опиши енергію числа, сильні сторони, виклики, місію та пораду. 7–9 речень."
     )
-    return get_ai_reading(prompt)
+    try:
+        return _hf_generate(prompt, max_new_tokens=220, temperature=0.8)
+    except Exception as e:
+        return f"⚠️ Єнот не порахував зірочки: {e}"
+
+def generate_ai_chiromancy(photo_description: str) -> str:
+    prompt = (
+        "Ти — містичний єнот-хіромант 🦝✨. Пиши українською. "
+        f"На фото видно: {photo_description}. "
+        "Опиши долоню: лінії життя/серця/розуму, темперамент, ресурси, поради на 8–12 речень. "
+        "Додай м’яке застереження і маленьку практику."
+    )
+    try:
+        return _hf_generate(prompt, max_new_tokens=260, temperature=0.85)
+    except Exception as e:
+        return f"⚠️ Єнот загубився між лініями долі: {e}"
