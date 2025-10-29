@@ -1,28 +1,34 @@
-# ai_free.py  — FIN 29.10.2025
+# ai_free.py
 import os
 import logging
 import requests
 
 LOGGER = logging.getLogger(__name__)
 
-HF_TOKEN = os.getenv("HF_TOKEN")  # у Render ключ має називатись саме HF_TOKEN
-BASE_URL = os.getenv("HF_BASE", "https://router.huggingface.co/hf-inference/models")
+# 🔑 Твій токен із Render (назва змінної: HF_TOKEN)
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    LOGGER.warning("⚠️ HF_TOKEN не знайдено в Environment Variables")
 
-# Список моделей, які зазвичай доступні через Inference Providers
+# 🆕 Новий офіційний endpoint (замість старого api-inference.huggingface.co)
+BASE_URL = "https://router.huggingface.co/hf-inference"
+
+# Моделі, які спробуємо по черзі
 CANDIDATE_MODELS = [
-    "HuggingFaceH4/zephyr-7b-beta",
-    "Qwen/Qwen2.5-7B-Instruct",
-    "microsoft/Phi-3-mini-4k-instruct",
-    "google/gemma-2-9b-it",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+    "mistralai/Mistral-7B-Instruct-v0.1",
+    "gpt2",
 ]
 
 HEADERS = {
     "Authorization": f"Bearer {HF_TOKEN}" if HF_TOKEN else "",
     "Content-Type": "application/json",
-    "User-Agent": "MysticEnotBot/1.0",
+    "User-Agent": "MysticEnotBot/1.0"
 }
 
-def _hf_generate(prompt: str, max_new_tokens: int = 260, temperature: float = 0.85) -> str:
+def _hf_generate(prompt: str, max_new_tokens: int = 220, temperature: float = 0.8) -> str:
+    """Виконує запит до нового Inference Providers API (router.huggingface.co)."""
     if not HF_TOKEN:
         raise RuntimeError("HF_TOKEN is not set in environment")
 
@@ -32,28 +38,26 @@ def _hf_generate(prompt: str, max_new_tokens: int = 260, temperature: float = 0.
             "max_new_tokens": max_new_tokens,
             "temperature": temperature,
             "return_full_text": False,
-            # опціонально: "top_p": 0.95,
         },
-        "options": {"wait_for_model": True},  # дочікуємось прогріву
+        "options": {"wait_for_model": True},
     }
 
     last_err = None
     for model_id in CANDIDATE_MODELS:
         url = f"{BASE_URL}/{model_id}"
         try:
-            r = requests.post(url, headers=HEADERS, json=payload, timeout=90)
+            r = requests.post(url, headers=HEADERS, json=payload, timeout=70)
             if r.status_code == 404:
-                LOGGER.warning(f"[HF] 404 for {model_id} — пробую наступну")
+                LOGGER.warning(f"⚠️ HF 404 для {model_id} — модель не знайдена, пробую наступну...")
                 continue
             if r.status_code in (429, 503):
-                LOGGER.warning(f"[HF] {r.status_code} on {model_id}: {r.text[:200]}")
-                return ("⚠️ Сервіс AI тимчасово перевантажений. "
-                        "Спробуй ще раз за хвилинку 🌙")
+                LOGGER.warning(f"HF {r.status_code} для {model_id}: {r.text[:200]}")
+                return "⚠️ Hugging Face зараз перевантажений. Спробуй ще раз через хвилинку 🌙"
 
             r.raise_for_status()
             data = r.json()
 
-            # Можливі формати відповіді
+            # Можливі варіанти відповіді
             text = None
             if isinstance(data, list) and data and isinstance(data[0], dict):
                 text = data[0].get("generated_text") or data[0].get("summary_text")
@@ -61,31 +65,32 @@ def _hf_generate(prompt: str, max_new_tokens: int = 260, temperature: float = 0.
                 text = data.get("generated_text") or data.get("summary_text")
 
             if not text:
-                # Повернемо сирий json, щоб не мовчати
                 text = str(data)
 
             return text.strip()
 
         except Exception as e:
             last_err = e
-            LOGGER.exception(f"[HF] error with {model_id}: {e}")
+            LOGGER.exception(f"HF error with {model_id}: {e}")
             continue
 
     raise RuntimeError(f"All HF models failed. Last error: {last_err}")
 
-# -------- ПУБЛІЧНІ ФУНКЦІЇ --------
+
+# ------------------------- 🦝 ПУБЛІЧНІ ФУНКЦІЇ -------------------------
 
 def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -> str:
     prompt = (
         "Ти — містичний єнот-таролог 🦝✨. Пиши українською. "
         f"Створи персональний розклад для {name}, {age} років, тема: {topic}. "
-        "Дай 7–10 речень: 1) загальна енергія; 2) поради; 3) попередження; "
-        "4) маленький ритуал. Тон: теплий, підтримуючий, магічний, без токсичного позитиву."
+        "Дай 7–10 речень: 1) загальна енергія; 2) поради; 3) попередження; 4) маленький ритуал. "
+        "Тон: теплий, підтримуючий, магічний, без токсичного позитиву."
     )
     try:
         return _hf_generate(prompt, max_new_tokens=260, temperature=0.85)
     except Exception as e:
-        return f"⚠️ Єнот не зміг зв’язатися з AI: {e}"
+        return f"⚠️ Єнот не зміг зв’язатися з Всесвітом Hugging Face: {e}"
+
 
 def generate_ai_astrology(name: str, birthdate: str) -> str:
     prompt = (
@@ -98,6 +103,7 @@ def generate_ai_astrology(name: str, birthdate: str) -> str:
         return _hf_generate(prompt, max_new_tokens=280, temperature=0.8)
     except Exception as e:
         return f"⚠️ Єнот не дістав зірки для астрології: {e}"
+
 
 def generate_ai_numerology(birthdate: str) -> str:
     digits = [int(c) for c in birthdate if c.isdigit()]
@@ -114,6 +120,7 @@ def generate_ai_numerology(birthdate: str) -> str:
         return _hf_generate(prompt, max_new_tokens=220, temperature=0.8)
     except Exception as e:
         return f"⚠️ Єнот не порахував зірочки: {e}"
+
 
 def generate_ai_chiromancy(photo_description: str) -> str:
     prompt = (
