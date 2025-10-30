@@ -1,29 +1,29 @@
 import os
+
+# 🧹 1️⃣ Видаляємо всі можливі proxy-змінні (Render їх автоматично додає)
+for key in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]:
+    if key in os.environ:
+        del os.environ[key]
+
+# 🔑 2️⃣ Тепер можна безпечно імпортувати OpenAI
 from openai import OpenAI
 
 # ------------------------------------------------------------------------
-# 🔑 Підключення API-ключа
+# 🔑 API ключ
 # ------------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("❌ OPENAI_API_KEY не знайдено в Environment Variables Render")
 
-# 🛑 Видаляємо proxy-змінні середовища (Render додає їх автоматично)
-for key in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
-    if key in os.environ:
-        del os.environ[key]
-
-# ✅ Створюємо клієнт без proxy, щоб уникнути помилки TypeError
-client = OpenAI(api_key=OPENAI_API_KEY, max_retries=2, http_client=None)
+# ✅ 3️⃣ Створюємо клієнт без додаткових параметрів (проксі вимкнено)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ------------------------------------------------------------------------
 # 🪄 Універсальна функція запиту до ChatGPT
 # ------------------------------------------------------------------------
 def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-mini") -> str:
-    """
-    Викликає GPT-4o через офіційний клієнт openai>=1.0.0
-    """
+    """Викликає GPT-4o через офіційний клієнт OpenAI"""
     try:
         response = client.chat.completions.create(
             model=model,
@@ -33,8 +33,7 @@ def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-min
                     "content": (
                         "Ти — Містичний Єнот 🦝✨, який говорить українською мовою "
                         "і створює чарівні, теплі та гумористичні передбачення. "
-                        "Твій стиль — дружній, магічний, доброзичливий, з легкою містикою. "
-                        "Відповідай у розмовному стилі, ніби звертаєшся безпосередньо до користувача."
+                        "Твій стиль — дружній, магічний, доброзичливий, з легкою містикою."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -42,7 +41,6 @@ def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-min
             temperature=temperature,
         )
         return response.choices[0].message.content.strip()
-
     except Exception as e:
         return f"⚠️ Єнот не зміг зв’язатись із ChatGPT: {e}"
 
@@ -54,9 +52,7 @@ def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -
         f"Створи персональний магічний розклад для {name}, {age} років. "
         f"Тема: {topic}. "
         "Напиши 7–10 речень: 1) загальна енергія; 2) поради; 3) попередження; "
-        "4) маленький ритуал для гармонії. "
-        "Тон — теплий, підтримуючий, магічний, без токсичного позитиву. "
-        "Пиши природно, без шаблонів, якби Єнот справді передбачав майбутнє 🦝✨."
+        "4) маленький ритуал. Тон — теплий, підтримуючий, магічний, без токсичного позитиву."
     )
     return _ask_openai(prompt)
 
@@ -67,8 +63,7 @@ def generate_ai_chiromancy(photo_description: str) -> str:
     prompt = (
         f"На фото видно: {photo_description}. "
         "Опиши долоню — лінії життя, серця, розуму; темперамент, ресурси, "
-        "і поради на 8–12 речень. Додай м’яке застереження та просту практику "
-        "для гармонізації енергії. Стиль — теплий, магічний, у дусі доброзичливого єнота 🦝."
+        "поради на 8–12 речень. Додай м’яке застереження і маленьку практику для гармонії."
     )
     return _ask_openai(prompt)
 
@@ -78,9 +73,8 @@ def generate_ai_chiromancy(photo_description: str) -> str:
 def generate_ai_astrology(name: str, birthdate: str) -> str:
     prompt = (
         f"Користувач: {name}, дата народження: {birthdate}. "
-        "Зроби астрологічний прогноз на 10–12 речень: характер, кохання, кар’єра, фінанси, "
-        "енергія місяця. Додай 3 поради та 1 обережність. "
-        "Тон — містичний, але дружній, з відчуттям, що Єнот шепоче зоряні таємниці 🌙."
+        "Зроби прогноз на 10–12 речень про характер, кохання, кар’єру, фінанси "
+        "та енергію місяця. Дай 3 конкретні поради та 1 обережність."
     )
     return _ask_openai(prompt)
 
@@ -95,8 +89,7 @@ def generate_ai_numerology(birthdate: str) -> str:
 
     prompt = (
         f"Число долі користувача — {n}. "
-        "Опиши енергію числа, сильні сторони, виклики, життєву місію та пораду. "
-        "Додай кілька натхненних фраз і завершення у стилі Єнота-нумеролога 🦝✨. "
-        "Текст — 7–9 речень, природний і доброзичливий."
+        "Опиши енергію числа, сильні сторони, виклики, місію та пораду. "
+        "Напиши 7–9 речень у стилі єнота-нумеролога 🦝✨."
     )
     return _ask_openai(prompt)
