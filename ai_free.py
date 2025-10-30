@@ -9,7 +9,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("❌ OPENAI_API_KEY не знайдено в Environment Variables Render")
 
-# Створюємо клієнт OpenAI
+# ✅ Створюємо клієнт OpenAI (новий синтаксис, без proxies)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ------------------------------------------------------------------------
