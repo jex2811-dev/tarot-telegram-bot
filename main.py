@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Містичний Єнот 🦝✨ — повна версія (sandbox + AI + Stars + реферальна логіка)"""
+"""Містичний Єнот 🦝✨ — AI-режим без списання зірок (реальні GPT-відповіді)"""
 
 from __future__ import annotations
 import logging
@@ -34,15 +34,14 @@ from ai_free import (
 )
 
 # ---------------------------------------------------------------------------
-# ⚙️ Конфігурація
-DEVELOPER_ID = 1545533785     # Твій Telegram ID
-BETA_MODE = True              # Режим тестування для нових фіч
-SANDBOX_MODE = True           # ✅ Не витрачає зірки (імітація оплат)
+# ⚙️ Конфіг
+DEVELOPER_ID = 1545533785
+BETA_MODE = True
+SANDBOX_MODE = "ai_only"  # 🧠 Реальні GPT-відповіді, без Telegram-оплати
 # ---------------------------------------------------------------------------
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
-# 🏠 Меню
 REPLY_KEYBOARD: Final[list[list[str]]] = [
     ["💫 Індивідуальні розклади (BETA)", "🃏 Карта дня"],
     ["🔮 Розкласти карти", "💎 Бонуси та запрошення"],
@@ -50,7 +49,6 @@ REPLY_KEYBOARD: Final[list[list[str]]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# 🌐 Keep-alive Flask server
 def run_health_server():
     app = Flask(__name__)
 
@@ -58,18 +56,15 @@ def run_health_server():
     def index():
         return "🦝 MysticEnotBot живий і тасує карти ✨"
 
-    thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True)
-    thread.start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True).start()
 
 # ---------------------------------------------------------------------------
-# 🎁 Щоденний бонус
 def give_daily_bonus_if_needed(user_id: str) -> bool:
     try:
         user_info = get_user_info(user_id)
         today = datetime.now().strftime("%Y-%m-%d")
         if str(user_info.get("last_daily_bonus", "")) == today:
             return False
-
         current_spreads = int(user_info.get("available_spreads", 0))
         new_spreads = current_spreads + 3
         row_index, _ = find_user_row(user_id)
@@ -77,31 +72,26 @@ def give_daily_bonus_if_needed(user_id: str) -> bool:
         users_sheet.update_cell(row_index, get_col_index("last_daily_bonus"), today)
         return True
     except Exception as e:
-        LOGGER.error(f"❌ Помилка bonus: {e}")
+        LOGGER.error(f"❌ Помилка бонусу: {e}")
         return False
 
 # ---------------------------------------------------------------------------
-# 🧠 Перевірка розробника
 def is_developer(user_id: int) -> bool:
     return user_id == DEVELOPER_ID
 
 # ---------------------------------------------------------------------------
-# ↩️ Назад у головне меню
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
     await update.message.reply_text("🔮 Ви повернулися до головного меню.", reply_markup=markup)
 
 # ---------------------------------------------------------------------------
-# 🚪 /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
     referred_by = args[0] if args and args[0].startswith("REF") else None
-
     add_user(str(user.id), user.username or "", user.first_name or "", "NONE", referred_by)
 
-    bonus_given = give_daily_bonus_if_needed(str(user.id))
-    if bonus_given:
+    if give_daily_bonus_if_needed(str(user.id)):
         await update.message.reply_text("🎁 Єнот подарував тобі <b>3 нові карти</b> на сьогодні! 🃏✨", parse_mode="HTML")
 
     greetings = [
@@ -109,29 +99,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Магічне вітання, {user.first_name or 'друже'} 🌙✨ Готовий до розкладу?",
         "Шурхіт карт і аромат магії... Єнот готовий 🃏",
     ]
-
     text = (
         f"{random.choice(greetings)}\n\n"
         "Я — <b>Містичний Єнот</b>, твій провідник у світі Таро 🔮\n"
         "🃏 <b>Карта дня</b> — енергія твого сьогодні.\n"
-        "🔮 <b>Розкласти карти</b> — обери напрямок: любов, кар’єра чи гроші.\n"
+        "🔮 <b>Розкласти карти</b> — любов, кар’єра чи гроші.\n"
         "💎 <b>Бонуси</b> — отримай +3 карти щодня або за друзів 💫"
     )
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True))
 
 # ---------------------------------------------------------------------------
-# 🔮 Категорії
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["💞 Любов", "💼 Кар’єра", "💰 Гроші"], ["⬅️ Назад"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    phrases = [
+    await update.message.reply_text(random.choice([
         "Єнот тасує карти... Куди зазирнемо сьогодні? 🔮🦝",
         "Серце, гаманець чи кар’єра? Обери свій шлях 💞💰💼",
-    ]
-    await update.message.reply_text(random.choice(phrases), reply_markup=reply_markup)
+    ]), reply_markup=reply_markup)
 
 # ---------------------------------------------------------------------------
-# 🃏 Обробка категорії
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_info = get_user_info(str(user.id))
@@ -162,7 +148,6 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 # ---------------------------------------------------------------------------
-# 🦝 Коментар Єнота
 async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = context.user_data.get("last_card")
     if not data:
@@ -172,7 +157,6 @@ async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(f"🦝 Коментар Єнота:\n{raccoon_text}")
 
 # ---------------------------------------------------------------------------
-# 💫 AI-розклади
 async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_developer(user.id):
@@ -188,7 +172,7 @@ async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("🪄 Обери магічну послугу 🌙", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
 # ---------------------------------------------------------------------------
-# 💳 Оплата Stars
+# 💳 AI-only: реальні GPT відповіді без оплати
 async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     services = {
@@ -201,10 +185,27 @@ async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     product, amount = services[text]
-    if SANDBOX_MODE:
-        await update.message.reply_text(f"🧪 Тестовий режим: {product} — {amount}⭐️ не списано.\nЄнот підтверджує, все працює ✨")
+
+    if SANDBOX_MODE == "ai_only":
+        await update.message.reply_text("🌙 Єнот налаштовується на твою енергію… трішки магії, і карти оживають 🃏✨")
+        await update.message.reply_text("🧠 Режим AI-ONLY: GPT створює справжній розклад (зірки не списуються).")
+
+        name = update.effective_user.first_name or "Друже"
+        try:
+            if product == "ai_tarot":
+                result = generate_ai_tarot(name, 25, "кохання")
+            elif product == "ai_astrology":
+                result = generate_ai_astrology(name, "1995-01-01")
+            elif product == "ai_numerology":
+                result = generate_ai_numerology("1995-01-01")
+            else:
+                result = generate_ai_chiromancy("долоня з м’якими лініями життя і серця")
+            await update.message.reply_text(result)
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Єнот не зміг зв’язатись із GPT: {e}")
         return
 
+    # стандартна логіка оплати (залишено для релізу)
     prices = [LabeledPrice(label=text, amount=amount)]
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
@@ -219,8 +220,7 @@ async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # ---------------------------------------------------------------------------
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.pre_checkout_query
-    await query.answer(ok=True)
+    await update.pre_checkout_query.answer(ok=True)
 
 # ---------------------------------------------------------------------------
 async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -240,7 +240,6 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text(f"⚠️ Помилка AI: {e}")
 
 # ---------------------------------------------------------------------------
-# 💎 Моя скринька
 async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_data = get_user_info(str(user.id))
@@ -266,15 +265,14 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
-# 📘 Як працює бот
 async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
-        "💫 Індивідуальні розклади — персональні AI-передбачення.\n"
+        "💫 Індивідуальні розклади — персональні AI-передбачення (GPT-4o-mini).\n"
         "🃏 Карта дня — щоденна підказка Всесвіту.\n"
         "🔮 Розкласти карти — любов, кар’єра, гроші.\n"
         "💎 Бонуси — +3 карти щодня або за друзів.\n"
-        "🎁 Усе це — з любов’ю від Єнота 🦝✨"
+        "🎁 Єнот завжди поруч і шепоче магічні слова 🌙"
     )
     await update.message.reply_text(text, parse_mode="HTML")
 
@@ -332,7 +330,6 @@ def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
-
     run_health_server()
     app = build_application(token)
     LOGGER.info("✅ Містичний Єнот запущений і готовий до магії!")
