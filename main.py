@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the Tarot Telegram bot."""
+"""Entry point for the Tarot Telegram bot (OpenAI edition)."""
 
 from __future__ import annotations
 import logging
@@ -19,13 +19,16 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     PreCheckoutQueryHandler,
+    ConversationHandler,
     filters,
 )
 
-# ✅ Імпорти функцій
+# ✅ Наші модулі
 from daily_card import get_daily_card, raccoon_interpretation_callback
 from gsheets_helper import add_user, get_user_info, users_sheet, find_user_row, get_col_index
 from cards import cards
+
+# 🔮 OpenAI-провайдер (у тебе вже оновлений ai_free.py під OpenAI)
 from ai_free import (
     generate_ai_tarot,
     generate_ai_astrology,
@@ -46,7 +49,7 @@ REPLY_KEYBOARD: Final[list[list[str]]] = [
     ["Як працює бот ❓"],
 ]
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 🌐 Keep-alive Flask server (Render)
 def run_health_server():
     app = Flask(__name__)
@@ -62,7 +65,7 @@ def run_health_server():
     thread.start()
     LOGGER.info("🌐 Flask keep-alive server запущений на порту 8080")
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 🎁 Щоденний бонус +3 карт/день
 def give_daily_bonus_if_needed(user_id: str) -> bool:
     try:
@@ -84,12 +87,12 @@ def give_daily_bonus_if_needed(user_id: str) -> bool:
         LOGGER.error(f"❌ Помилка в give_daily_bonus_if_needed: {e}")
         return False
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 🧠 Перевірка розробника
 def is_developer(user_id: int) -> bool:
     return BETA_MODE and user_id == DEVELOPER_ID
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # ↩️ Коротке повернення в головне меню
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
@@ -100,7 +103,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer()
         await q.message.reply_text("🔮 Ви повернулися до головного меню.", reply_markup=markup)
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 🚪 /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -143,8 +146,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
 
-# ---------------------------------------------------------------------------
-# 🔮 Показ категорій
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔮 Показ категорій (безкоштовні)
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["💞 Любов", "💼 Кар’єра", "💰 Гроші"], ["⬅️ Назад"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -156,7 +159,7 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(random.choice(phrases), reply_markup=reply_markup)
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 🃏 Обробка вибору категорії (списання 1 карти)
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -199,8 +202,8 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=ReplyKeyboardMarkup([["🦝 Коментар Єнота"], ["⬅️ Назад"]], resize_keyboard=True),
     )
 
-# ---------------------------------------------------------------------------
-# 🦝 Коментар Єнота (кнопка з reply-keyboard)
+# ─────────────────────────────────────────────────────────────────────────────
+# 🦝 Коментар Єнота
 async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = context.user_data.get("last_card")
     if not data:
@@ -209,8 +212,8 @@ async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFA
     _, _, raccoon_text = data
     await update.message.reply_text(f"🦝 Коментар Єнота:\n{raccoon_text}")
 
-# ---------------------------------------------------------------------------
-# 💫 Меню платних сервісів (доступне лише в BETA для розробника)
+# ─────────────────────────────────────────────────────────────────────────────
+# 💫 Меню платних сервісів
 async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_developer(user.id):
@@ -226,39 +229,30 @@ async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("🪄 Обери магічну послугу 🌙",
                                     reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
-# ---------------------------------------------------------------------------
-# 🧾 Надсилання інвойсу в XTR (Stars). provider_token порожній — це НОРМАЛЬНО для цифрових товарів.
-async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ─────────────────────────────────────────────────────────────────────────────
+# ⭐️ Загальний інвойсер (XTR)
+async def send_invoice_with_product(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    product_key: str,
+    title: str,
+    amount_stars: int,
+):
     chat_id = update.effective_chat.id
-    text = update.message.text
-    services = {
-        "💫 Індивідуальний AI-розклад (10⭐️)": ("ai_tarot", 10),
-        "🖐 AI-Хіромантія (15⭐️)": ("chiromancy", 15),
-        "🌌 AI-Астрологічний прогноз (12⭐️)": ("astrology", 12),
-        "🔢 AI-Нумерологічний портрет (10⭐️)": ("numerology", 10),
-    }
-    if text not in services:
-        return
-
-    product, amount = services[text]
-    title = text.split("(")[0].strip()
-    prices = [LabeledPrice(label=title, amount=amount)]
-
-    LOGGER.info(f"🧾 Надсилаю інвойс: product={product}, amount={amount}⭐️, chat={chat_id}")
-
+    prices = [LabeledPrice(label=title, amount=amount_stars)]
     await context.bot.send_invoice(
         chat_id=chat_id,
         title=title,
         description="Магічна послуга від Єнота 🦝✨",
-        payload=product,
-        provider_token="",          # ✅ для Stars та цифрових товарів
-        currency="XTR",              # ✅ обов’язково
+        payload=product_key,          # потім зчитаємо тут, що саме купили
+        provider_token="",
+        currency="XTR",
         prices=prices,
         start_parameter="mystic_enot_stars",
     )
 
-# ---------------------------------------------------------------------------
-# ✅ ОБОВ’ЯЗКОВО для Stars: підтвердити pre_checkout_query (інакше “Loading…”)
+# ─────────────────────────────────────────────────────────────────────────────
+# ✅ ОБОВ’ЯЗКОВО для Stars
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.pre_checkout_query
     try:
@@ -268,11 +262,10 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         LOGGER.error(f"❌ pre_checkout_query error: {e}")
         await query.answer(ok=False, error_message="Єнот не зміг підтвердити оплату 🦝💫")
 
-# ---------------------------------------------------------------------------
-# 💳 Успішна оплата → запускаємо відповідну AI-функцію
+# ─────────────────────────────────────────────────────────────────────────────
+# 💳 Успішна оплата → запуск AI з даними з context.user_data
 async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name or "Друже"
     payment = update.message.successful_payment
     product = payment.invoice_payload
 
@@ -286,28 +279,155 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
 
     try:
         if product == "ai_tarot":
+            data = context.user_data.get("ai_tarot", {})
+            name = data.get("name") or (update.effective_user.first_name or "Друже")
+            age = int(data.get("age") or 25)
+            topic = data.get("topic") or "кохання"
             await update.message.reply_text("💫 Єнот розкладає карти спеціально для тебе... 🦝✨")
-            text = generate_ai_tarot(user_name, 25, "кар'єра")
+            text = generate_ai_tarot(name, age, topic)
             await update.message.reply_text(text)
+
         elif product == "chiromancy":
+            desc = context.user_data.get("chiromancy", {}).get("description", "долоня без опису")
             await update.message.reply_text("🖐 Єнот розглядає твою долоню... 🦝✨")
-            text = generate_ai_chiromancy("долоня з м’якими лініями життя і серця")
+            text = generate_ai_chiromancy(desc)
             await update.message.reply_text(text)
+
         elif product == "astrology":
+            data = context.user_data.get("astrology", {})
+            name = data.get("name") or (update.effective_user.first_name or "Друже")
+            birthdate = data.get("birthdate") or "01.01.2000"
             await update.message.reply_text("🌌 Єнот дивиться на твої зірки... ✨")
-            text = generate_ai_astrology(user_name, "01.01.2000")
+            text = generate_ai_astrology(name, birthdate)
             await update.message.reply_text(text)
+
         elif product == "numerology":
+            birthdate = context.user_data.get("numerology", {}).get("birthdate", "01.01.2000")
             await update.message.reply_text("🔢 Єнот обчислює твоє космічне число долі...")
-            text = generate_ai_numerology("01.01.2000")
+            text = generate_ai_numerology(birthdate)
             await update.message.reply_text(text)
+
         else:
             await update.message.reply_text("🤔 Єнот ще не знає цієї магії...")
+
     except Exception as e:
         LOGGER.error(f"❌ Помилка при генерації AI-тексту: {e}")
         await update.message.reply_text("⚠️ Єнот заплутався у зорях... спробуй пізніше 🌙")
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────── ОПИТУВАЛЬНИКИ ПЕРЕД ОПЛАТОЮ ────────────────────────
+# Стані діалогів
+(
+    T_NAME, T_AGE, T_TOPIC,          # Tarot
+    A_NAME, A_BIRTH,                 # Astrology
+    N_BIRTH,                         # Numerology
+    C_WAIT_PHOTO, C_WAIT_DESC,       # Chiromancy
+) = range(9)
+
+# ——— TAROT ———
+async def tarot_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✨ Як тебе звати?")
+    return T_NAME
+
+async def tarot_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ai_tarot"] = {"name": update.message.text}
+    await update.message.reply_text("🔮 Скільки тобі років?")
+    return T_AGE
+
+async def tarot_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ai_tarot"]["age"] = update.message.text.strip()
+    await update.message.reply_text("💫 Яку тему обираєш? (кохання, фінанси, кар’єра, інше)")
+    return T_TOPIC
+
+async def tarot_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ai_tarot"]["topic"] = update.message.text.strip()
+    await update.message.reply_text("🧾 Готово! Виставляю інвойс на 10⭐️…")
+    await send_invoice_with_product(update, context, "ai_tarot", "Індивідуальний AI-розклад", 10)
+    return ConversationHandler.END
+
+tarot_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex("^💫 Індивідуальний AI-розклад \\(10⭐️\\)$"), tarot_start)],
+    states={
+        T_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, tarot_name)],
+        T_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, tarot_age)],
+        T_TOPIC: [MessageHandler(filters.TEXT & ~filters.COMMAND, tarot_topic)],
+    },
+    fallbacks=[],
+)
+
+# ——— ASTROLOGY ———
+async def astro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✨ Вкажи ім’я (як тебе називати в прогнозі)?")
+    return A_NAME
+
+async def astro_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["astrology"] = {"name": update.message.text.strip()}
+    await update.message.reply_text("🌙 Вкажи дату народження у форматі ДД.ММ.РРРР (наприклад 05.09.1998)")
+    return A_BIRTH
+
+async def astro_birth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["astrology"]["birthdate"] = update.message.text.strip()
+    await update.message.reply_text("🧾 Чудово! Виставляю інвойс на 12⭐️…")
+    await send_invoice_with_product(update, context, "astrology", "AI-Астрологічний прогноз", 12)
+    return ConversationHandler.END
+
+astro_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex("^🌌 AI-Астрологічний прогноз \\(12⭐️\\)$"), astro_start)],
+    states={
+        A_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, astro_name)],
+        A_BIRTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, astro_birth)],
+    },
+    fallbacks=[],
+)
+
+# ——— NUMEROLOGY ———
+async def num_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔢 Вкажи дату народження у форматі ДД.ММ.РРРР")
+    return N_BIRTH
+
+async def num_birth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["numerology"] = {"birthdate": update.message.text.strip()}
+    await update.message.reply_text("🧾 Супер! Виставляю інвойс на 10⭐️…")
+    await send_invoice_with_product(update, context, "numerology", "AI-Нумерологічний портрет", 10)
+    return ConversationHandler.END
+
+num_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex("^🔢 AI-Нумерологічний портрет \\(10⭐️\\)$"), num_start)],
+    states={
+        N_BIRTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, num_birth)],
+    },
+    fallbacks=[],
+)
+
+# ——— CHIROMANCY ———
+async def chiro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🖐 Надішли, будь ласка, <b>фото долоні</b> (краще правої) у хорошому світлі.",
+        parse_mode="HTML"
+    )
+    return C_WAIT_PHOTO
+
+async def chiro_got_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Фото нам потрібно для UX; сам AI читає текстовий опис:
+    await update.message.reply_text("Супер! Коротко опиши, що на долоні: форма, лінії, особливості (родимки тощо).")
+    return C_WAIT_DESC
+
+async def chiro_got_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["chiromancy"] = {"description": update.message.text.strip()}
+    await update.message.reply_text("🧾 Єнот усе записав! Виставляю інвойс на 15⭐️…")
+    await send_invoice_with_product(update, context, "chiromancy", "AI-Хіромантія", 15)
+    return ConversationHandler.END
+
+chiro_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex("^🖐 AI-Хіромантія \\(15⭐️\\)$"), chiro_start)],
+    states={
+        C_WAIT_PHOTO: [MessageHandler(filters.PHOTO, chiro_got_photo)],
+        C_WAIT_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, chiro_got_desc)],
+    },
+    fallbacks=[],
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 💎 Магічна скринька
 async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -349,7 +469,7 @@ async def show_my_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Єнот заплутався у магії Google Sheets... 🦝✨")
         LOGGER.error(f"Помилка в show_my_chest: {e}")
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # 📘 Як працює бот
 async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -363,8 +483,8 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="HTML")
 
-# ---------------------------------------------------------------------------
-# 📜 /terms і /paysupport — базові вимоги Telegram для продажів
+# ─────────────────────────────────────────────────────────────────────────────
+# 📜 /terms і /paysupport
 async def terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📜 Умови користування: цифрові розклади та поради є розважальним контентом.\n"
@@ -376,20 +496,13 @@ async def paysupport(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🛟 Підтримка оплат: напишіть @TaroEnotBot (DM) із деталями чека або скриншотом."
     )
 
-# ---------------------------------------------------------------------------
-# 🧭 Роутер повідомлень
+# ─────────────────────────────────────────────────────────────────────────────
+# 🧭 Роутер простих кнопок
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text == "💫 Індивідуальні розклади (BETA)":
         await show_paid_services(update, context)
-    elif text in [
-        "💫 Індивідуальний AI-розклад (10⭐️)",
-        "🖐 AI-Хіромантія (15⭐️)",
-        "🌌 AI-Астрологічний прогноз (12⭐️)",
-        "🔢 AI-Нумерологічний портрет (10⭐️)",
-    ]:
-        await send_payment_invoice(update, context)
     elif text == "🃏 Карта дня":
         await get_daily_card(update, context)
     elif text == "🔮 Розкласти карти":
@@ -407,7 +520,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Оберіть команду з меню ⬇️")
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
 
@@ -415,6 +528,12 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("terms", terms))
     app.add_handler(CommandHandler("paysupport", paysupport))
+
+    # Опитувальники перед оплатою
+    app.add_handler(tarot_handler)
+    app.add_handler(astro_handler)
+    app.add_handler(num_handler)
+    app.add_handler(chiro_handler)
 
     # Повідомлення (reply-кнопки)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -428,7 +547,7 @@ def build_application(token: str) -> Application:
 
     return app
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -450,6 +569,6 @@ def main():
             LOGGER.error(f"❌ Помилка виконання polling: {e}")
             time.sleep(10)
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     main()
