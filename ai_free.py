@@ -1,5 +1,5 @@
 import os
-import openai
+from openai import OpenAI
 
 # ------------------------------------------------------------------------
 # 🔑 Підключення API-ключа
@@ -9,14 +9,17 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("❌ OPENAI_API_KEY не знайдено в Environment Variables Render")
 
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ------------------------------------------------------------------------
 # 🪄 Універсальна функція запиту до ChatGPT
 # ------------------------------------------------------------------------
 def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-mini") -> str:
+    """
+    Викликає GPT-4o через офіційний клієнт openai>=1.0.0
+    """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model,
             messages=[
                 {
@@ -31,7 +34,8 @@ def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-min
             ],
             temperature=temperature,
         )
-        return response.choices[0].message["content"].strip()
+        return response.choices[0].message.content.strip()
+
     except Exception as e:
         return f"⚠️ Єнот не зміг зв’язатись із ChatGPT: {e}"
 
