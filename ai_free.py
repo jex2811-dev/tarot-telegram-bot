@@ -1,27 +1,22 @@
 import os
-from openai import OpenAI
+import openai
 
 # ------------------------------------------------------------------------
-# 🔑 1. Підключення API-ключа
+# 🔑 Підключення API-ключа
 # ------------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("❌ OPENAI_API_KEY не знайдено в Environment Variables Render")
 
-# ✅ Створюємо клієнт OpenAI (новий синтаксис, без proxies)
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = OPENAI_API_KEY
 
 # ------------------------------------------------------------------------
-# 🪄 2. Універсальна функція запиту до ChatGPT
+# 🪄 Універсальна функція запиту до ChatGPT
 # ------------------------------------------------------------------------
 def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-mini") -> str:
-    """
-    Відправляє запит до ChatGPT (через офіційний клієнт OpenAI)
-    і повертає відповідь українською мовою від Містичного Єнота.
-    """
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model=model,
             messages=[
                 {
@@ -36,14 +31,12 @@ def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-min
             ],
             temperature=temperature,
         )
-
-        return response.choices[0].message.content.strip()
-
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         return f"⚠️ Єнот не зміг зв’язатись із ChatGPT: {e}"
 
 # ------------------------------------------------------------------------
-# 🃏 3. Індивідуальний AI-розклад
+# 🃏 Індивідуальний AI-розклад
 # ------------------------------------------------------------------------
 def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -> str:
     prompt = (
@@ -55,7 +48,7 @@ def generate_ai_tarot(name: str, age: int = 25, topic: str = "кохання") -
     return _ask_openai(prompt)
 
 # ------------------------------------------------------------------------
-# ✋ 4. AI-Хіромантія
+# ✋ AI-Хіромантія
 # ------------------------------------------------------------------------
 def generate_ai_chiromancy(photo_description: str) -> str:
     prompt = (
@@ -66,7 +59,7 @@ def generate_ai_chiromancy(photo_description: str) -> str:
     return _ask_openai(prompt)
 
 # ------------------------------------------------------------------------
-# 🌌 5. AI-Астрологічний прогноз
+# 🌌 AI-Астрологічний прогноз
 # ------------------------------------------------------------------------
 def generate_ai_astrology(name: str, birthdate: str) -> str:
     prompt = (
@@ -77,7 +70,7 @@ def generate_ai_astrology(name: str, birthdate: str) -> str:
     return _ask_openai(prompt)
 
 # ------------------------------------------------------------------------
-# 🔢 6. AI-Нумерологічний портрет
+# 🔢 AI-Нумерологічний портрет
 # ------------------------------------------------------------------------
 def generate_ai_numerology(birthdate: str) -> str:
     digits = [int(c) for c in birthdate if c.isdigit()]
