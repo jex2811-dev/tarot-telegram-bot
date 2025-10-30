@@ -35,8 +35,8 @@ from ai_free import (
     generate_ai_chiromancy,
 )
 
-# 🔧 Dev / Beta конфіг
-from config import DEVELOPER_ID, BETA_MODE
+# 🔧 Конфігурація
+from config import DEVELOPER_ID, BETA_MODE, SANDBOX_MODE
 
 # ---------------------------------------------------------------------------
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
@@ -198,6 +198,9 @@ async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_T
 # ---------------------------------------------------------------------------
 # 🦝 Коментар Єнота
 async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text != "🦝 Коментар Єнота":
+        return
+
     data = context.user_data.get("last_card")
     if not data:
         await update.message.reply_text("Спершу обери розклад і карту, а потім натисни «🦝 Коментар Єнота».")
@@ -233,12 +236,20 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer(ok=False, error_message="Єнот не зміг підтвердити оплату 🦝💫")
 
 # ---------------------------------------------------------------------------
-# 🪄 AI функції після оплати
+# 💳 Обробка успішної оплати (з sandbox)
 async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     payment = update.message.successful_payment
     product = payment.invoice_payload
     LOGGER.info(f"✅ successful_payment: {user.id}, {product}")
+
+    if SANDBOX_MODE:
+        await update.message.reply_text(
+            f"🧪 Тестовий режим: оплата не проведена, але логіка перевірена.\n"
+            f"Послуга: {product}\n"
+            "Єнот підтверджує — все працює! 🦝✨"
+        )
+        return
 
     if product == "ai_tarot":
         await update.message.reply_text(generate_ai_tarot(user.first_name))
@@ -252,6 +263,18 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("⚠️ Невідомий тип послуги.")
 
 # ---------------------------------------------------------------------------
+# 📘 Як працює бот
+async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "✨ <b>Як працює Містичний Єнот</b> 🦝🔮\n\n"
+        "1️⃣ Обери «Карту дня» або «Розкласти карти».\n"
+        "2️⃣ Єнот відкриє значення карти й дасть свій коментар.\n"
+        "3️⃣ Отримуй щоденні бонуси та запрошуй друзів 💎\n"
+        "4️⃣ В BETA-режимі тестуються AI-розклади та платні функції 🪄",
+        parse_mode="HTML",
+    )
+
+# ---------------------------------------------------------------------------
 # 📜 /terms і /paysupport
 async def terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -263,15 +286,50 @@ async def paysupport(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🛟 Підтримка оплат: напишіть @TaroEnotBot (DM) із чеком або скрином.")
 
 # ---------------------------------------------------------------------------
+# 🧭 Основний роутер повідомлень
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text in ["💫 Індивідуальні розклади (BETA)", "💫 Індивіальні розклади"]:
+        await show_paid_services(update, context)
+
+    elif text in ["🃏 Карта дня", "💫 Карта дня"]:
+        await get_daily_card(update, context)
+
+    elif text == "🔮 Розкласти карти":
+        await show_categories(update, context)
+
+    elif text in ["💞 Любов", "💼 Кар’єра", "💰 Гроші"]:
+        await handle_category_choice(update, context)
+
+    elif text == "💎 Бонуси та запрошення":
+        await show_my_chest(update, context)
+
+    elif text in ["Як працює бот ❓", "❓ Як працює бот"]:
+        await send_how_it_works(update, context)
+
+    elif text == "⬅️ Назад":
+        await back_to_main_menu(update, context)
+
+    elif text == "🦝 Коментар Єнота":
+        await handle_raccoon_comment_text(update, context)
+
+    else:
+        await update.message.reply_text("Спершу обери розклад і карту, а потім натисни «🦝 Коментар Єнота».")
+
+# ---------------------------------------------------------------------------
 def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("terms", terms))
     app.add_handler(CommandHandler("paysupport", paysupport))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_raccoon_comment_text))
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_payment))
+
     return app
 
 # ---------------------------------------------------------------------------
