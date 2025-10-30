@@ -1,31 +1,25 @@
 import os
-
-# 🧹 1️⃣ Видаляємо всі можливі proxy-змінні (Render їх автоматично додає)
-for key in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]:
-    if key in os.environ:
-        del os.environ[key]
-
-# 🔑 2️⃣ Тепер можна безпечно імпортувати OpenAI
-from openai import OpenAI
+import openai
 
 # ------------------------------------------------------------------------
-# 🔑 API ключ
+# 🔑 Підключення API-ключа
 # ------------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("❌ OPENAI_API_KEY не знайдено в Environment Variables Render")
 
-# ✅ 3️⃣ Створюємо клієнт без додаткових параметрів (проксі вимкнено)
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = OPENAI_API_KEY
 
 # ------------------------------------------------------------------------
 # 🪄 Універсальна функція запиту до ChatGPT
 # ------------------------------------------------------------------------
 def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-mini") -> str:
-    """Викликає GPT-4o через офіційний клієнт OpenAI"""
+    """
+    Сумісна функція для старого API openai==0.28.1
+    """
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model=model,
             messages=[
                 {
@@ -40,7 +34,7 @@ def _ask_openai(prompt: str, temperature: float = 0.85, model: str = "gpt-4o-min
             ],
             temperature=temperature,
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         return f"⚠️ Єнот не зміг зв’язатись із ChatGPT: {e}"
 
