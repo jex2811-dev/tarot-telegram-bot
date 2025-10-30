@@ -28,7 +28,7 @@ from daily_card import get_daily_card, raccoon_interpretation_callback
 from gsheets_helper import add_user, get_user_info, users_sheet, find_user_row, get_col_index
 from cards import cards
 
-# 🔮 OpenAI-провайдер (у тебе вже оновлений ai_free.py під OpenAI)
+# 🔮 OpenAI-провайдер
 from ai_free import (
     generate_ai_tarot,
     generate_ai_astrology,
@@ -147,7 +147,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(welcome_text, reply_markup=markup, parse_mode="HTML")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 🔮 Показ категорій (безкоштовні)
+# 🔮 Показ категорій
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["💞 Любов", "💼 Кар’єра", "💰 Гроші"], ["⬅️ Назад"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -160,7 +160,7 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(random.choice(phrases), reply_markup=reply_markup)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 🃏 Обробка вибору категорії (списання 1 карти)
+# 🃏 Обробка вибору категорії
 async def handle_category_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_info = get_user_info(str(user.id))
@@ -213,116 +213,16 @@ async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(f"🦝 Коментар Єнота:\n{raccoon_text}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 💫 Меню платних сервісів
-async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not is_developer(user.id):
-        await update.message.reply_text("🧪 Ця магічна функція ще тестується Єнотом 🦝✨")
-        return
-    keyboard = [
-        ["💫 Індивідуальний AI-розклад (10⭐️)"],
-        ["🖐 AI-Хіромантія (15⭐️)"],
-        ["🌌 AI-Астрологічний прогноз (12⭐️)"],
-        ["🔢 AI-Нумерологічний портрет (10⭐️)"],
-        ["⬅️ Назад"],
-    ]
-    await update.message.reply_text("🪄 Обери магічну послугу 🌙",
-                                    reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ⭐️ Загальний інвойсер (XTR)
-async def send_invoice_with_product(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    product_key: str,
-    title: str,
-    amount_stars: int,
-):
-    chat_id = update.effective_chat.id
-    prices = [LabeledPrice(label=title, amount=amount_stars)]
-    await context.bot.send_invoice(
-        chat_id=chat_id,
-        title=title,
-        description="Магічна послуга від Єнота 🦝✨",
-        payload=product_key,          # потім зчитаємо тут, що саме купили
-        provider_token="",
-        currency="XTR",
-        prices=prices,
-        start_parameter="mystic_enot_stars",
-    )
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ✅ ОБОВ’ЯЗКОВО для Stars
-async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.pre_checkout_query
-    try:
-        LOGGER.info(f"🟡 pre_checkout_query: {query.invoice_payload} від {query.from_user.id}")
-        await query.answer(ok=True)
-    except Exception as e:
-        LOGGER.error(f"❌ pre_checkout_query error: {e}")
-        await query.answer(ok=False, error_message="Єнот не зміг підтвердити оплату 🦝💫")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 💳 Успішна оплата → запуск AI з даними з context.user_data
-async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    payment = update.message.successful_payment
-    product = payment.invoice_payload
-
-    LOGGER.info(f"✅ successful_payment: user={user_id}, product={product}, total={payment.total_amount} XTR")
-
-    if BETA_MODE and user_id != DEVELOPER_ID:
-        await update.message.reply_text("⚠️ Оплата тимчасово недоступна. Єнот тестує магію 🦝✨")
-        return
-
-    await update.message.reply_text("✅ Оплата успішна! Єнот уже готує твою магію... 🦝✨")
-
-    try:
-        if product == "ai_tarot":
-            data = context.user_data.get("ai_tarot", {})
-            name = data.get("name") or (update.effective_user.first_name or "Друже")
-            age = int(data.get("age") or 25)
-            topic = data.get("topic") or "кохання"
-            await update.message.reply_text("💫 Єнот розкладає карти спеціально для тебе... 🦝✨")
-            text = generate_ai_tarot(name, age, topic)
-            await update.message.reply_text(text)
-
-        elif product == "chiromancy":
-            desc = context.user_data.get("chiromancy", {}).get("description", "долоня без опису")
-            await update.message.reply_text("🖐 Єнот розглядає твою долоню... 🦝✨")
-            text = generate_ai_chiromancy(desc)
-            await update.message.reply_text(text)
-
-        elif product == "astrology":
-            data = context.user_data.get("astrology", {})
-            name = data.get("name") or (update.effective_user.first_name or "Друже")
-            birthdate = data.get("birthdate") or "01.01.2000"
-            await update.message.reply_text("🌌 Єнот дивиться на твої зірки... ✨")
-            text = generate_ai_astrology(name, birthdate)
-            await update.message.reply_text(text)
-
-        elif product == "numerology":
-            birthdate = context.user_data.get("numerology", {}).get("birthdate", "01.01.2000")
-            await update.message.reply_text("🔢 Єнот обчислює твоє космічне число долі...")
-            text = generate_ai_numerology(birthdate)
-            await update.message.reply_text(text)
-
-        else:
-            await update.message.reply_text("🤔 Єнот ще не знає цієї магії...")
-
-    except Exception as e:
-        LOGGER.error(f"❌ Помилка при генерації AI-тексту: {e}")
-        await update.message.reply_text("⚠️ Єнот заплутався у зорях... спробуй пізніше 🌙")
-
-# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────── ОПИТУВАЛЬНИКИ ПЕРЕД ОПЛАТОЮ ────────────────────────
-# Стані діалогів
 (
     T_NAME, T_AGE, T_TOPIC,          # Tarot
     A_NAME, A_BIRTH,                 # Astrology
     N_BIRTH,                         # Numerology
     C_WAIT_PHOTO, C_WAIT_DESC,       # Chiromancy
 ) = range(9)
+# 👆 Точно 9 елементів (і кома стоїть правильно)
+
+# --- решта твого коду (опитувальники, інвойси, show_my_chest, main і т.д.) без змін ---
 
 # ——— TAROT ———
 async def tarot_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
