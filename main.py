@@ -92,7 +92,6 @@ def run_health_server():
 # 📢 Розсилка (push-повідомлення всім користувачам)
 # ---------------------------------------------------------------------------
 from gsheets_helper import users_sheet  # твоя таблиця користувачів
-from config import DEVELOPER_ID  # твій Telegram ID
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """📢 Відправляє повідомлення всім користувачам бота."""
