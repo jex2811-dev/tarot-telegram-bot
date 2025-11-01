@@ -89,6 +89,61 @@ def run_health_server():
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True).start()
 
 # ---------------------------------------------------------------------------
+# 📢 Розсилка (push-повідомлення всім користувачам)
+# ---------------------------------------------------------------------------
+from gsheets_helper import users_sheet  # твоя таблиця користувачів
+from config import DEVELOPER_ID  # твій Telegram ID
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """📢 Відправляє повідомлення всім користувачам бота."""
+    user_id = update.effective_user.id
+
+    # ✅ Перевірка: тільки адміну дозволено розсилати
+    if user_id != DEVELOPER_ID:
+        await update.message.reply_text("⛔ Ця команда доступна лише адміну.")
+        return
+
+    # ✅ Якщо немає тексту після команди
+    if not context.args:
+        await update.message.reply_text(
+            "✏️ Напиши повідомлення після команди.\n\n"
+            "Приклад:\n`/broadcast Нові функції доступні в боті! 🦝✨`",
+            parse_mode="Markdown",
+        )
+        return
+
+    # 📄 Повідомлення, яке потрібно надіслати
+    text_to_send = " ".join(context.args)
+
+    # 🧾 Отримуємо список користувачів з Google Sheets
+    all_users = users_sheet.get_all_values()[1:]  # пропускаємо заголовки
+
+    success_count = 0
+    fail_count = 0
+
+    await update.message.reply_text("🚀 Починаю розсилку...")
+
+    for row in all_users:
+        try:
+            target_id = int(row[0])  # ID користувача з таблиці
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=text_to_send,
+                parse_mode="HTML",
+            )
+            success_count += 1
+            await asyncio.sleep(0.05)  # щоб уникнути flood-limit
+        except Exception as e:
+            print(f"❌ Не вдалося відправити користувачу {row}: {e}")
+            fail_count += 1
+
+    await update.message.reply_text(
+        f"✅ Розсилка завершена!\n"
+        f"📬 Успішно: {success_count}\n"
+        f"⚠️ Помилки: {fail_count}"
+    )
+
+# ---------------------------------------------------------------------------
 # ⌛️ Маленькі живі затримки
 async def pause_typing(update: Update, seconds: float):
     try:
@@ -553,6 +608,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("terms", terms))
     app.add_handler(CommandHandler("paysupport", paysupport))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+
 
     # Фото для хіромантії
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
