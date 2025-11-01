@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""Містичний Єнот 🦝✨ — повна логіка + AI з оплатою Telegram Stars (XTR)"""
+"""Містичний Єнот 🦝✨ — повна логіка + AI + LIVE оплата Telegram Stars (XTR)"""
 
 from __future__ import annotations
 import logging
@@ -13,11 +12,7 @@ from datetime import datetime
 from typing import Final
 from flask import Flask
 
-from telegram import (
-    ReplyKeyboardMarkup,
-    Update,
-    LabeledPrice,
-)
+from telegram import ReplyKeyboardMarkup, Update, LabeledPrice
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -44,31 +39,38 @@ from ai_free import (
 # ⚙️ Конфіг
 DEVELOPER_ID = 1545533785
 BETA_MODE = True
-
-# "live" — реальні платежі. "sandbox" — тестове середовище Stars.
-SANDBOX_MODE = os.getenv("STARS_MODE", "live").strip().lower()  # "live"|"sandbox"
-
-# 🔖 Прайс у зірках (XTR)
-PRICE_TAROT = 10         # 💫 Індивідуальний AI-розклад
-PRICE_ASTRO = 12         # 🌌 AI-Астрологічний прогноз
-PRICE_NUMERO = 15        # 🔢 AI-Нумерологічний портрет
-PRICE_CHIROMANCY = 20    # ✋ AI-Хіромантія
-
-# Підписи кнопок із цінами
-BTN_TAROT = f"💫 Індивідуальний AI-розклад — {PRICE_TAROT}⭐"
-BTN_ASTRO = f"🌌 AI-Астрологічний прогноз — {PRICE_ASTRO}⭐"
-BTN_NUMERO = f"🔢 AI-Нумерологічний портрет — {PRICE_NUMERO}⭐"
-BTN_CHIROMANCY = f"✋ AI-Хіромантія — {PRICE_CHIROMANCY}⭐"
-
-# Payload-и інвойсів (ідентифікатори послуг)
-PAYLOAD_TAROT = "paid_ai_tarot"
-PAYLOAD_ASTRO = "paid_ai_astrology"
-PAYLOAD_NUMERO = "paid_ai_numerology"
-PAYLOAD_CHIROMANCY = "paid_ai_chiromancy"
-
+SANDBOX_MODE = "live"  # 💫 Увімкнено реальну оплату Telegram Stars
 # ---------------------------------------------------------------------------
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+# 📦 Прайс (кількість зірок = ціна в XTR)
+PRICES = {
+    "ai_tarot": {
+        "amount": 10,
+        "title": "Індивідуальний AI-розклад",
+        "description": "Персональний AI-розклад за твоїм запитом. Живі інсайти та поради 🃏",
+        "start_parameter": "mysticenot_ai_tarot",
+    },
+    "ai_astrology": {
+        "amount": 12,
+        "title": "AI-Астрологічний прогноз",
+        "description": "Персональний огляд енергій за датою народження. Легко і зрозуміло 🌌",
+        "start_parameter": "mysticenot_ai_astrology",
+    },
+    "ai_numerology": {
+        "amount": 15,
+        "title": "AI-Нумерологічний портрет",
+        "description": "Твої ключові числа й впливи дати народження. Практичні висновки 🔢",
+        "start_parameter": "mysticenot_ai_numerology",
+    },
+    "ai_chiromancy": {
+        "amount": 20,
+        "title": "AI-Хіромантія",
+        "description": "Опис ліній долоні за фото або текстом. Характер і потенціал ✋",
+        "start_parameter": "mysticenot_ai_chiromancy",
+    },
+}
 
 # 🏠 Головне меню
 REPLY_KEYBOARD: Final[list[list[str]]] = [
@@ -119,12 +121,13 @@ def is_developer(user_id: int) -> bool:
     return user_id == DEVELOPER_ID
 
 # ---------------------------------------------------------------------------
-# ↩️ Назад у головне меню (UX-очистка станів)
+# ↩️ Назад у головне меню (оновлено — UX-фікс)
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 🧹 Скидання усіх проміжних станів, якщо користувач передумав
     for key in [
         "mode", "name", "age", "topic",
         "awaiting_name", "awaiting_age", "awaiting_topic", "awaiting_photo",
-        "pending_service"
+        "paid_product"
     ]:
         context.user_data.pop(key, None)
 
@@ -155,8 +158,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💎 <b>Бонуси та запрошення</b> — реферальні подарунки та рівень мага.\n"
         "Натискай кнопку нижче — почнемо магію! ✨"
     )
-    await update.message.reply_text(text, parse_mode="HTML",
-        reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True))
+    await update.message.reply_text(
+        text, parse_mode="HTML",
+        reply_markup=ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
+    )
 
 # ---------------------------------------------------------------------------
 # 🔮 Показ категорій
@@ -222,143 +227,90 @@ async def handle_raccoon_comment_text(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(f"🦝 Коментар Єнота:\n{raccoon_text}")
 
 # ---------------------------------------------------------------------------
-# 💫 Меню AI-сервісів (BETA) — тепер з цінами на кнопках
+# 💫 Меню AI-сервісів (із цінами)
 async def show_paid_services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [BTN_TAROT],
-        [BTN_ASTRO],
-        [BTN_NUMERO],
-        [BTN_CHIROMANCY],
+        ["💫 Індивідуальний AI-розклад (10⭐️)"],
+        ["🌌 AI-Астрологічний прогноз (12⭐️)"],
+        ["🔢 AI-Нумерологічний портрет (15⭐️)"],
+        ["✋ AI-Хіромантія (20⭐️)"],
         ["⬅️ Назад"],
     ]
-    await update.message.reply_text(
-        "🪄 Обери магічну послугу 🌙\n\n"
-        "Оплата — у Telegram Stars (XTR). Після успішної оплати я одразу запитаю твоє ім’я та потрібні дані ✨",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    )
+    await update.message.reply_text("🪄 Обери магічну послугу 🌙",
+                                    reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
 # ---------------------------------------------------------------------------
-# 🧾 Надсилання інвойсу (Stars)
-async def send_stars_invoice(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    title: str,
-    description: str,
-    payload: str,
-    amount_stars: int,
-):
-    chat_id = update.effective_chat.id
-
-    # Для цифрових товарів provider_token НЕ потрібен — передаємо порожній рядок.
-    provider_token = ""  # ВАЖЛИВО: для фізичних товарів треба реальний токен
-
-    # Multi-chat інвойс: його можна форвардити; оплата все одно контролюється ботом.
-    start_parameter = f"{payload}_start"
-
-    prices = [LabeledPrice(label=title, amount=amount_stars)]  # amount == кількість зірок (XTR)
-
-    await context.bot.send_invoice(
-        chat_id=chat_id,
-        title=title,
-        description=description,
-        payload=payload,
-        provider_token=provider_token,
-        currency="XTR",
-        prices=prices,
-        start_parameter=start_parameter,
-        max_tip_amount=0,
-        suggest_tip_amounts=[],
-        is_flexible=False,  # фіксована ціна
-        # Для Stars додаткові поля (name/email/phone/shipping) НЕ потрібні
-        need_name=False,
-        need_email=False,
-        need_phone_number=False,
-        need_shipping_address=False,
-        send_email_to_provider=False,
-        send_phone_number_to_provider=False,
-        protect_content=False,
-    )
-
-# ---------------------------------------------------------------------------
-# Обробник натискання платних кнопок → надсилаємо інвойс
-async def handle_paid_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 🧾 Виставлення інвойсу (LIVE або SANDBOX логіка)
+async def send_payment_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == BTN_TAROT:
-        await send_stars_invoice(
-            update, context,
-            title="Індивідуальний AI-розклад",
-            description="Персональний розклад із деталями, порадами та підсумком.",
-            payload=PAYLOAD_TAROT,
-            amount_stars=PRICE_TAROT,
-        )
-    elif text == BTN_ASTRO:
-        await send_stars_invoice(
-            update, context,
-            title="AI-Астрологічний прогноз",
-            description="Прогноз на основі дати народження.",
-            payload=PAYLOAD_ASTRO,
-            amount_stars=PRICE_ASTRO,
-        )
-    elif text == BTN_NUMERO:
-        await send_stars_invoice(
-            update, context,
-            title="AI-Нумерологічний портрет",
-            description="Особистісні числа, вектори, рекомендації.",
-            payload=PAYLOAD_NUMERO,
-            amount_stars=PRICE_NUMERO,
-        )
-    elif text == BTN_CHIROMANCY:
-        await send_stars_invoice(
-            update, context,
-            title="AI-Хіромантія",
-            description="Аналіз ліній долоні за фото або описом.",
-            payload=PAYLOAD_CHIROMANCY,
-            amount_stars=PRICE_CHIROMANCY,
-        )
-
-# ---------------------------------------------------------------------------
-# ✅ PreCheckout — підтверджуємо замовлення (обов'язково відповісти ≤10s)
-async def handle_pre_checkout_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.pre_checkout_query
-    try:
-        # Тут можна робити додаткові перевірки доступності сервісу
-        await query.answer(ok=True)
-    except Exception as e:
-        LOGGER.error(f"PreCheckout error: {e}")
-        await query.answer(ok=False, error_message="Сталась технічна помилка. Спробуйте пізніше 🦝")
-
-# ---------------------------------------------------------------------------
-# 🧾 Успішна оплата — просимо ім’я та запускаємо відповідний сценарій
-async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    sp = msg.successful_payment
-    payload = sp.invoice_payload  # PAYLOAD_TAROT, PAYLOAD_ASTRO, ...
-
-    # Запам'ятовуємо придбаний сервіс і стартуємо збір даних. Завжди питаємо ім’я.
-    service_to_mode = {
-        PAYLOAD_TAROT: "ai_tarot_name",
-        PAYLOAD_ASTRO: "ai_astrology_name",
-        PAYLOAD_NUMERO: "ai_numerology_name",
-        PAYLOAD_CHIROMANCY: "ai_chiromancy_name",
+    # Підтримка кнопок із ціною та без
+    map_text_to_key = {
+        "💫 Індивідуальний AI-розклад": "ai_tarot",
+        "💫 Індивідуальний AI-розклад (10⭐️)": "ai_tarot",
+        "🌌 AI-Астрологічний прогноз": "ai_astrology",
+        "🌌 AI-Астрологічний прогноз (12⭐️)": "ai_astrology",
+        "🔢 AI-Нумерологічний портрет": "ai_numerology",
+        "🔢 AI-Нумерологічний портрет (15⭐️)": "ai_numerology",
+        "✋ AI-Хіромантія": "ai_chiromancy",
+        "✋ AI-Хіромантія (20⭐️)": "ai_chiromancy",
     }
-    mode = service_to_mode.get(payload)
-
-    # Збережемо ідентифікатори для можливих рефундів (за потреби)
-    # sp.telegram_payment_charge_id — варто логувати у проді
-    LOGGER.info(
-        "Оплата успішна: payload=%s, charge_id=%s, total=%s %s",
-        payload, sp.telegram_payment_charge_id, sp.total_amount, sp.currency
-    )
-
-    if not mode:
-        await msg.reply_text("Оплата отримана ✅ Але Єнот не впізнав послугу. Напишіть /paysupport")
+    product_key = map_text_to_key.get(text)
+    if not product_key:
         return
 
-    context.user_data.clear()
-    context.user_data["mode"] = mode
-    # ВАЖЛИВО: просимо ім’я першим, як ти просив
-    await msg.reply_text("✨ Дякую за оплату! Напиши, будь ласка, своє ім’я:")
+    product = PRICES[product_key]
+
+    # Якщо SANDBOX — одразу в діалог (без списання зірок)
+    if SANDBOX_MODE != "live":
+        context.user_data["paid_product"] = product_key
+        await _kickoff_dialog_after_payment(update, context, product_key)
+        return
+
+    # LIVE: надсилаємо інвойс XTR
+    prices = [LabeledPrice(label=product["title"], amount=product["amount"])]
+    await context.bot.send_invoice(
+        chat_id=update.effective_chat.id,
+        title=product["title"],
+        description=product["description"],
+        payload=product_key,             # використаємо в successful_payment
+        provider_token="",               # цифрові товари: токен не потрібен
+        currency="XTR",                  # Telegram Stars
+        prices=prices,
+        start_parameter=product["start_parameter"],
+    )
+
+# ---------------------------------------------------------------------------
+# ✅ PreCheckout — Telegram вимагає відповісти ОК
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.pre_checkout_query.answer(ok=True)
+
+# ---------------------------------------------------------------------------
+# 💸 Успішна оплата — запускаємо діалог збору даних
+async def handle_successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sp = update.message.successful_payment
+    product_key = sp.invoice_payload  # те, що передали в payload
+    context.user_data["paid_product"] = product_key
+
+    await update.message.reply_text("✅ Оплата успішна! Єнот вже готує магію… 🦝✨")
+    await pause_typing(update, 1.0)
+    await _kickoff_dialog_after_payment(update, context, product_key)
+
+# ---------------------------------------------------------------------------
+# 🧠 Після платежу: перше запитання залежно від сервісу
+async def _kickoff_dialog_after_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, product_key: str):
+    if product_key == "ai_tarot":
+        await update.message.reply_text("✨ Напиши, будь ласка, своє ім’я:")
+        context.user_data["mode"] = "ai_tarot_name"
+    elif product_key == "ai_astrology":
+        await update.message.reply_text("🌙 Як тебе звати?")
+        context.user_data["mode"] = "ai_astrology_name"
+    elif product_key == "ai_numerology":
+        await update.message.reply_text("🔢 Напиши своє ім’я:")
+        context.user_data["mode"] = "ai_numerology_name"
+    elif product_key == "ai_chiromancy":
+        await update.message.reply_text("🖐️ Як тебе звати?")
+        context.user_data["mode"] = "ai_chiromancy_name"
 
 # ---------------------------------------------------------------------------
 # 🧭 Діалоги збору даних (UX)
@@ -376,6 +328,7 @@ async def handle_ai_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if mode == "ai_tarot_age":
+        # простий захист від нечислових значень
         try:
             age = int(user_input.strip())
             if not (5 <= age <= 120):
@@ -452,6 +405,7 @@ async def handle_ai_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if mode == "ai_chiromancy_wait_input":
+        # якщо прийшов текст (а не фото)
         desc = user_input.strip()
         if desc:
             name = context.user_data.get("name", "друже")
@@ -466,6 +420,7 @@ async def handle_ai_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 # Обробка фото для хіромантії (Vision)
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # працюємо тільки коли чекаємо вхід від хіромантії
     if context.user_data.get("mode") != "ai_chiromancy_wait_input":
         return
     photo = update.message.photo[-1]
@@ -538,19 +493,41 @@ async def send_how_it_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 # ---------------------------------------------------------------------------
+# 📜 /terms і /paysupport — вимоги Telegram (залишаємо)
+async def terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📜 Умови користування: цифрові розклади та поради є розважальним контентом.\n"
+        "Повернення можливе у разі технічної помилки. Пишіть у /paysupport."
+    )
+
+async def paysupport(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🛟 Підтримка оплат: напишіть @TaroEnotBot (DM) із деталями чека або скриншотом."
+    )
+
+# ---------------------------------------------------------------------------
 # 🧭 Роутер повідомлень
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    # якщо триває діалог — обробляємо його
+    # якщо триває діалог із користувачем — обробляємо його
     if context.user_data.get("mode"):
         await handle_ai_dialog(update, context)
         return
 
     if text == "💫 Індивідуальні розклади (BETA)":
         await show_paid_services(update, context)
-    elif text in [BTN_TAROT, BTN_ASTRO, BTN_NUMERO, BTN_CHIROMANCY]:
-        await handle_paid_button(update, context)
+    elif text in [
+        "💫 Індивідуальний AI-розклад",
+        "💫 Індивідуальний AI-розклад (10⭐️)",
+        "🌌 AI-Астрологічний прогноз",
+        "🌌 AI-Астрологічний прогноз (12⭐️)",
+        "🔢 AI-Нумерологічний портрет",
+        "🔢 AI-Нумерологічний портрет (15⭐️)",
+        "✋ AI-Хіромантія",
+        "✋ AI-Хіромантія (20⭐️)",
+    ]:
+        await send_payment_invoice(update, context)
     elif text == "🃏 Карта дня":
         await get_daily_card(update, context)
     elif text == "🔮 Розкласти карти":
@@ -587,23 +564,10 @@ def build_application(token: str) -> Application:
     app.add_handler(CallbackQueryHandler(raccoon_interpretation_callback, pattern="^raccoon_interpretation$"))
 
     # Платежі Stars
-    app.add_handler(PreCheckoutQueryHandler(handle_pre_checkout_query))
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_payment))
 
     return app
-
-# ---------------------------------------------------------------------------
-# 📜 /terms і /paysupport — вимоги Telegram
-async def terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📜 Умови користування: цифрові розклади та поради є розважальним контентом.\n"
-        "Повернення можливе у разі технічної помилки. Пишіть у /paysupport."
-    )
-
-async def paysupport(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🛟 Підтримка оплат: напишіть @TaroEnotBot (DM) із деталями чека або скриншотом."
-    )
 
 # ---------------------------------------------------------------------------
 def main():
@@ -611,12 +575,6 @@ def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
-
-    # Для sandbox можна вивести попередження в логи
-    if SANDBOX_MODE == "sandbox":
-        LOGGER.warning("⚠️ Запущено в SANDBOX Stars — платежі тестові")
-    else:
-        LOGGER.info("✅ LIVE Stars — реальні платежі")
 
     run_health_server()
     app = build_application(token)
