@@ -39,7 +39,7 @@ from ai_free import (
 # ⚙️ Конфіг
 DEVELOPER_ID = 1545533785
 BETA_MODE = True
-SANDBOX_MODE = "ai_only"   # 🧠 Реальні GPT-відповіді, зірки не списуються
+SANDBOX_MODE = "live"  # 💫 Увімкнено реальну оплату Telegram Stars
 # ---------------------------------------------------------------------------
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
