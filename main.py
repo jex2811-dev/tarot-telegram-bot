@@ -93,8 +93,12 @@ def is_developer(user_id: int) -> bool:
     return user_id == DEVELOPER_ID
 
 # ---------------------------------------------------------------------------
-# ↩️ Назад у головне меню
+# ↩️ Назад у головне меню (оновлено — UX-фікс)
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 🧹 Скидання усіх проміжних станів, якщо користувач передумав
+    for key in ["mode", "name", "age", "topic", "awaiting_name", "awaiting_age", "awaiting_topic", "awaiting_photo"]:
+        context.user_data.pop(key, None)
+
     markup = ReplyKeyboardMarkup(REPLY_KEYBOARD, resize_keyboard=True)
     await update.message.reply_text("🔮 Ви повернулися до головного меню.", reply_markup=markup)
 
