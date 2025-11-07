@@ -569,7 +569,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_ai_dialog(update, context)
         return
 
-    if text == "💫 Індивідуальні розклади (BETA)":
+    if text == "💫 Індивідуальні розклади":
         await show_paid_services(update, context)
     elif text in [
         "💫 Індивідуальний AI-розклад",
